@@ -1,1232 +1,1416 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Biomedical Search Crosswalker & Systematic Strategy Builder</title>
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            slate: {
-              950: '#0b1329',
-              900: '#1c2541',
-              800: '#3a506b',
-            },
-            teal: {
-              400: '#48cae4',
-              500: '#00b4d8',
-              600: '#0077b6',
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <style>
-    /* Custom focus indicators for accessibility */
-    input:focus, button:focus, select:focus {
-      outline: 2px solid #00b4d8;
-      outline-offset: 2px;
-    }
-    /* Smooth scroll behavior */
-    html {
-      scroll-behavior: smooth;
-    }
-    /* Custom scrollbars */
-    ::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #0b1329;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #1c2541;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #3a506b;
-    }
-  </style>
-</head>
-<body class="bg-slate-950 text-slate-100 flex flex-col min-h-screen font-sans antialiased">
+import React, { useState, useEffect } from 'react';
+import { 
+  Search, 
+  HelpCircle, 
+  Database, 
+  Layers, 
+  Copy, 
+  Check, 
+  Plus, 
+  Trash2, 
+  History, 
+  BookOpen, 
+  RefreshCw, 
+  Save, 
+  FolderOpen,
+  Share2,
+  X,
+  FileText,
+  Bookmark,
+  ChevronRight,
+  Info,
+  Sliders,
+  Sparkles
+} from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, addDoc, deleteDoc } from 'firebase/firestore';
 
-  <!-- ========================================== -->
-  <!-- HEADER SECTION -->
-  <!-- ========================================== -->
-  <header class="bg-slate-950 border-b border-slate-900 sticky top-0 z-40 shadow-lg">
-    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-3">
-        <div class="bg-teal-500/10 text-teal-400 p-2.5 rounded-xl border border-teal-500/30">
-          <!-- Database SVG Icon -->
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-6 h-6"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        </div>
-        <div>
-          <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            Biomedical Search Crosswalk <span class="text-xs bg-teal-500/20 text-teal-300 font-semibold px-2.5 py-0.5 rounded-full border border-teal-500/30">v2.5 Local</span>
-          </h1>
-          <p class="text-xs text-slate-400">Translate clinical terms & formulate systematic queries offline</p>
-        </div>
-      </div>
+// --- FIREBASE AND GLOBAL CONFIGS ---
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'biomed-mesh-crosswalk-app';
+let db = null;
+let auth = null;
+let firebaseEnabled = false;
 
-      <!-- Main Navigation Tabs -->
-      <nav class="flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800" role="tablist" aria-label="Main Navigation">
-        <button 
-          id="tab-btn-crosswalk"
-          onclick="switchTab('crosswalk')" 
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition bg-teal-500 text-slate-950 shadow"
-          role="tab"
-          aria-selected="true"
-          aria-controls="tab-panel-crosswalk"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          1. Crosswalk Term
-        </button>
-        <button 
-          id="tab-btn-builder"
-          onclick="switchTab('builder')" 
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white relative"
-          role="tab"
-          aria-selected="false"
-          aria-controls="tab-panel-builder"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-          2. Strategy Builder
-          <span id="pinned-count-badge" class="hidden absolute -top-1.5 -right-1.5 bg-rose-500 text-white font-bold w-4.5 h-4.5 rounded-full text-[10px] flex items-center justify-center animate-pulse">0</span>
-        </button>
-        <button 
-          id="tab-btn-help"
-          onclick="switchTab('help')" 
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white"
-          role="tab"
-          aria-selected="false"
-          aria-controls="tab-panel-help"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-          3. Guide & Syntax
-        </button>
-      </nav>
-    </div>
-  </header>
+if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+  try {
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+    firebaseEnabled = true;
+  } catch (e) {
+    console.error("Firebase initialization failed:", e);
+  }
+}
 
-  <!-- ========================================== -->
-  <!-- MAIN WORKSPACE -->
-  <!-- ========================================== -->
-  <main class="grow max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+// System instructions for the MeSH and CINAHL mapping agent
+const SYSTEM_PROMPT = `You are an expert Health Sciences Medical Librarian and Biomedical Search Strategist.
+Your task is to analyze the user's clinical keyword, research query, or natural language term and output a precise, structured JSON crosswalk containing the appropriate Medical Subject Heading (MeSH) and CINAHL Subject Heading.
+
+You MUST structure your response as valid JSON matching the requested schema. Ensure terminology and syntax are highly accurate, matching official NLM MeSH definitions and EBSCO/Ovid database formatting.
+- PubMed tags: [Mesh] for standard, [Majr] for Major Topic, [tiab] for Title/Abstract.
+- Ovid MEDLINE: '/' for MeSH term, 'exp' for explode, '*' prefix for Major Focus, '.ti,ab,kf.' for title/abstract/keywords.
+- CINAHL: 'MH' for Subject Heading, '+' for explode, 'MM' for Major Subject Heading, double quotes for phrases.`;
+
+export default function App() {
+  // --- STATES ---
+  const [keywordInput, setKeywordInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [resultData, setResultData] = useState(null);
+  const [crosswalkHistory, setCrosswalkHistory] = useState([]);
+  
+  // Search Builder States
+  const [concepts, setConcepts] = useState([]);
+  const [activeTab, setActiveTab] = useState('crosswalk'); // 'crosswalk' | 'builder' | 'help' | 'cloud'
+  const [databaseView, setDatabaseView] = useState('pubmed'); // 'pubmed' | 'medline' | 'cinahl'
+  
+  // Notification Modal States
+  const [modalMessage, setModalMessage] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  
+  // Firebase State
+  const [user, setUser] = useState(null);
+  const [savedStrategies, setSavedStrategies] = useState([]);
+  const [strategyTitle, setStrategyTitle] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // --- COMPUTE GENERATED QUERY FOR SINGLE CONCEPT ---
+  const getCompiledSingleQuery = (concept, dbType) => {
+    const mesh = concept.meshTerm;
+    const cinahl = concept.cinahlTerm || concept.meshTerm;
+    const keywords = concept.suggestedKeywords || [];
+    const isSystematic = concept.isSystematic !== false; // default true
+    const isExplode = concept.isExplode !== false; // default true
+    const isMajor = !!concept.isMajor;
+
+    if (dbType === 'pubmed') {
+      const meshTag = isMajor ? '[Majr]' : '[Mesh]';
+      const meshQuery = `"${mesh}"${meshTag}`;
+      if (!isSystematic || keywords.length === 0) return meshQuery;
+      
+      const keywordTerms = keywords.map(kw => `"${kw}"[tiab]`).join(' OR ');
+      return `(${meshQuery} OR ${keywordTerms})`;
+    } 
     
-    <!-- LEFT COLUMN: CONCEPT INPUT PANELS (PERSISTENT CO-PILOT) -->
-    <div class="lg:col-span-4 flex flex-col gap-6">
-      
-      <!-- CONCEPT DICTIONARY SEARCH CARD -->
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-xs font-bold tracking-widest uppercase text-slate-400 flex items-center gap-1.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-teal-400"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-            Clinical Search Input
-          </h2>
-          <span class="text-[10px] bg-slate-950 border border-slate-800 px-2 py-0.5 rounded text-slate-400 font-mono">100% Client-Side</span>
-        </div>
+    if (dbType === 'medline') {
+      // Ovid MEDLINE
+      let meshQuery = '';
+      if (isMajor) {
+        meshQuery = `*${mesh}/`;
+      } else {
+        meshQuery = isExplode ? `exp ${mesh}/` : `${mesh}/`;
+      }
+      if (!isSystematic || keywords.length === 0) return meshQuery;
 
-        <p class="text-xs text-slate-300 leading-relaxed">
-          Input any medical topic, population, or keyword. The client engine maps it to standard vocabulary catalogs immediately.
-        </p>
+      // Ovid uses .ti,ab,kf. for Title/Abstract/Keyword fields. 
+      // Replace * with $ for Ovid wildcards
+      const mappedKws = keywords.map(kw => {
+        const cleaned = kw.replace(/\*/g, '$');
+        return cleaned.includes(' ') ? `"${cleaned}"` : cleaned;
+      });
+      const keywordQuery = `(${mappedKws.join(' or ')}).ti,ab,kf.`;
+      return `(${meshQuery} or ${keywordQuery})`;
+    }
 
-        <form id="search-form" onsubmit="handleSearchSubmit(event)" class="flex flex-col gap-2">
-          <div class="relative">
-            <label for="keyword-input" class="sr-only">Biomedical keyword or phrase</label>
-            <input 
-              id="keyword-input" 
-              type="text" 
-              placeholder="e.g., Breast Cancer, Diabetes, Dementia..."
-              class="w-full bg-slate-950 text-white placeholder-slate-500 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none transition"
-              required
-            />
-            <span class="absolute left-3.5 top-3.5 text-slate-500">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            </span>
-          </div>
+    if (dbType === 'cinahl') {
+      // EBSCO CINAHL
+      let subjectHeadingQuery = '';
+      if (isMajor) {
+        subjectHeadingQuery = `MM "${cinahl}"`;
+      } else {
+        subjectHeadingQuery = isExplode ? `MH "${cinahl}+"` : `MH "${cinahl}"`;
+      }
+      if (!isSystematic || keywords.length === 0) return subjectHeadingQuery;
 
-          <button 
-            type="submit"
-            class="w-full bg-teal-500 text-slate-950 font-bold py-2.5 px-4 rounded-xl text-xs hover:bg-teal-400 active:scale-95 transition flex items-center justify-center gap-1.5 shadow-md"
-          >
-            Crosswalk Term
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-          </button>
-        </form>
+      const mappedKws = keywords.map(kw => kw.includes(' ') ? `"${kw}"` : kw);
+      const keywordQuery = mappedKws.join(' OR ');
+      return `(${subjectHeadingQuery} OR ${keywordQuery})`;
+    }
 
-        <!-- PRESET CLINICAL EXAMPLES -->
-        <div>
-          <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Curated Dictionary Shortcuts:</span>
-          <div id="shortcuts-container" class="flex flex-wrap gap-1.5">
-            <!-- Dynamic shortcuts will be inserted here -->
-          </div>
-        </div>
-      </section>
+    return '';
+  };
 
-      <!-- HISTORY LOG CARD -->
-      <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-3">
-        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-teal-500"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Recently Mapped Terms
-        </h3>
-        <div id="history-container" class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-          <p class="text-xs text-slate-500 italic">No search history in this session yet.</p>
-        </div>
-      </section>
-    </div>
+  // --- COMPUTE OVERALL COMBINED QUERY ---
+  const getMasterQuery = (dbType) => {
+    if (concepts.length === 0) return '/* Add concepts to the Search Builder canvas below to construct your systematic query */';
+    
+    return concepts.map((concept, index) => {
+      const single = getCompiledSingleQuery(concept, dbType);
+      const op = index > 0 ? ` ${concept.operator || 'AND'} ` : '';
+      return `${op}${single}`;
+    }).join('\n');
+  };
 
-    <!-- RIGHT COLUMN: DETAILED TABS AND BUILDING WORKSPACE -->
-    <div class="lg:col-span-8 flex flex-col gap-6">
-      
-      <!-- TAB 1: SEARCH & CROSSWALK RESULTS -->
-      <section id="tab-panel-crosswalk" class="flex flex-col gap-6" role="tabpanel" aria-labelledby="tab-btn-crosswalk">
-        
-        <!-- INITIAL STATE BANNER -->
-        <div id="crosswalk-placeholder" class="bg-slate-900 border border-slate-800 rounded-3xl p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
-          <div class="w-16 h-16 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-center text-teal-400 shadow-lg">
-            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-          </div>
-          <div>
-            <h3 class="text-lg font-bold text-white">Controlled Vocabulary Crosswalk</h3>
-            <p class="text-xs text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
-              Search a medical term to retrieve and align indexing parameters for major databases. Added search concepts will compile here.
-            </p>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg mt-4">
-            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-              <span class="text-xs font-bold text-teal-300 block mb-1">MeSH Translation</span>
-              <span class="text-[10px] text-slate-500">Official MEDLINE / PubMed identifiers</span>
-            </div>
-            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-              <span class="text-xs font-bold text-sky-300 block mb-1">CINAHL Matching</span>
-              <span class="text-[10px] text-slate-500">Nursing index classifications</span>
-            </div>
-            <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800">
-              <span class="text-xs font-bold text-emerald-300 block mb-1">Text-Word Strings</span>
-              <span class="text-[10px] text-slate-500">Synonyms for complete recall</span>
-            </div>
-          </div>
-        </div>
+  // --- CUSTOM ALERT UTILITY ---
+  const showAlert = (title, message) => {
+    setModalMessage({ title, message });
+  };
 
-        <!-- DETAILED MAPPING REPORT (HIDDEN BY DEFAULT) -->
-        <div id="crosswalk-result-card" class="hidden flex flex-col gap-6">
-          
-          <!-- VOCABULARY OVERVIEW CARD -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-            <div class="absolute top-0 right-0 w-48 h-48 bg-teal-500/5 rounded-full blur-2xl"></div>
-            
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <span class="text-[10px] uppercase font-extrabold text-teal-400 tracking-wider">Matched Descriptor</span>
-                <h2 id="result-mesh-term" class="text-2xl font-bold text-white mt-1">--</h2>
-                <p class="text-xs text-slate-400 italic mt-0.5">User Keyword: "<span id="result-user-keyword">--</span>"</p>
-              </div>
+  // --- FIREBASE AUTHENTICATION ---
+  useEffect(() => {
+    if (!firebaseEnabled) return;
 
-              <button 
-                onclick="pinCurrentToBuilder()"
-                class="bg-teal-500 text-slate-950 font-extrabold px-4.5 py-2.5 rounded-xl text-xs hover:bg-teal-400 active:scale-95 transition flex items-center gap-1.5 shadow-md"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                Pin to Search Builder
-              </button>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-800">
-              <!-- MeSH block -->
-              <div class="flex flex-col gap-2">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-teal-300 uppercase tracking-wide">MeSH Heading (MEDLINE)</span>
-                  <span id="result-mesh-year" class="text-[10px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded border border-slate-800">--</span>
-                </div>
-                <p id="result-mesh-note" class="text-xs text-slate-300 bg-slate-950/50 p-4 rounded-xl border border-slate-800/60 leading-relaxed min-h-[70px]">
-                  --
-                </p>
-              </div>
-
-              <!-- CINAHL block -->
-              <div class="flex flex-col gap-2">
-                <span class="text-xs font-bold text-sky-300 uppercase tracking-wide">CINAHL Heading Match</span>
-                <div class="text-xs text-slate-300 bg-slate-950/50 p-4 rounded-xl border border-slate-800/60 leading-relaxed min-h-[70px]">
-                  <span id="result-cinahl-term" class="font-bold text-white block mb-1">Aligned Descriptor: --</span>
-                  <p id="result-cinahl-note">--</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-800">
-              <!-- Synonym List -->
-              <div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-2">Subject Index Entry Synonyms</span>
-                <div id="result-synonyms" class="flex flex-wrap gap-1.5">
-                  <!-- Synonyms injected here -->
-                </div>
-              </div>
-
-              <!-- Tree Hierarchy -->
-              <div>
-                <span class="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-2">Concept Tree Position</span>
-                <div id="result-tree" class="flex flex-col gap-1 text-[11px] bg-slate-950/40 p-3.5 rounded-xl border border-slate-800">
-                  <!-- Tree nodes injected here -->
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- DIRECT DB TRANSLATORS -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-400"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5V19A9 3 0 0 0 21 19V5"></path><path d="M3 12A9 3 0 0 0 21 12"></path></svg>
-                Direct Database Index Formats
-              </h3>
-              <span class="text-[10px] text-slate-400 italic">Copy individual query lines</span>
-            </div>
-
-            <div class="grid grid-cols-1 gap-4">
-              <!-- PubMed -->
-              <div class="bg-slate-950 p-4.5 rounded-xl border border-slate-850 flex flex-col gap-3">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> PubMed Translation
-                </span>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Standard MeSH</span>
-                    <span id="code-pm-std" class="text-[11px] font-mono text-emerald-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-pm-std')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Major Topic Focus</span>
-                    <span id="code-pm-maj" class="text-[11px] font-mono text-emerald-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-pm-maj')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Systematic Block</span>
-                    <span id="code-pm-sys" class="text-[11px] font-mono text-emerald-300 select-all py-2 leading-relaxed break-all">--</span>
-                    <button onclick="copyToClipboardId('code-pm-sys')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- MEDLINE (Ovid) -->
-              <div class="bg-slate-950 p-4.5 rounded-xl border border-slate-850 flex flex-col gap-3">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> MEDLINE (Ovid) Translation
-                </span>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Exploded MeSH</span>
-                    <span id="code-med-std" class="text-[11px] font-mono text-blue-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-med-std')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Non-Exploded MeSH</span>
-                    <span id="code-med-maj" class="text-[11px] font-mono text-blue-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-med-maj')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Systematic Block</span>
-                    <span id="code-med-sys" class="text-[11px] font-mono text-blue-300 select-all py-2 leading-relaxed break-all">--</span>
-                    <button onclick="copyToClipboardId('code-med-sys')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CINAHL -->
-              <div class="bg-slate-950 p-4.5 rounded-xl border border-slate-850 flex flex-col gap-3">
-                <span class="text-xs font-bold text-white flex items-center gap-1.5">
-                  <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> CINAHL (EBSCO) Translation
-                </span>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Exploded Subject Heading</span>
-                    <span id="code-cin-std" class="text-[11px] font-mono text-indigo-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-cin-std')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Exact Heading</span>
-                    <span id="code-cin-maj" class="text-[11px] font-mono text-indigo-300 select-all py-2 break-all">--</span>
-                    <button onclick="copyToClipboardId('code-cin-maj')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                  <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex flex-col justify-between">
-                    <span class="text-[9px] text-slate-500 font-extrabold uppercase">Systematic Block</span>
-                    <span id="code-cin-sys" class="text-[11px] font-mono text-indigo-300 select-all py-2 leading-relaxed break-all">--</span>
-                    <button onclick="copyToClipboardId('code-cin-sys')" class="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 self-end transition">
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- TAB 2: SYSTEMATIC STRATEGY CANVAS -->
-      <section id="tab-panel-builder" class="hidden flex flex-col gap-6" role="tabpanel" aria-labelledby="tab-btn-builder">
-        
-        <!-- CANVAS PARAMETERS HEADER -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h2 class="text-base font-bold text-white flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-teal-400"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-              Systematic Search Strategy Canvas
-            </h2>
-            <p class="text-xs text-slate-400 mt-1">Combine nested index descriptors into robust, high-performance logic</p>
-          </div>
-
-          <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-850" role="group" aria-label="Query target selection">
-            <button onclick="changeDatabaseView('pubmed')" id="btn-view-pubmed" class="text-xs px-3.5 py-1.5 rounded-lg font-bold uppercase transition bg-teal-500 text-slate-950">PubMed</button>
-            <button onclick="changeDatabaseView('medline')" id="btn-view-medline" class="text-xs px-3.5 py-1.5 rounded-lg font-bold uppercase transition text-slate-400 hover:text-white">MEDLINE</button>
-            <button onclick="changeDatabaseView('cinahl')" id="btn-view-cinahl" class="text-xs px-3.5 py-1.5 rounded-lg font-bold uppercase transition text-slate-400 hover:text-white">CINAHL</button>
-          </div>
-        </div>
-
-        <!-- STRATEGY EMPTY CANVAS -->
-        <div id="builder-empty-placeholder" class="bg-slate-900 border border-slate-800 rounded-3xl p-12 text-center flex flex-col items-center justify-center gap-4 min-h-[350px]">
-          <div class="w-14 h-14 bg-slate-950 rounded-xl flex items-center justify-center text-slate-600 border border-slate-850">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </div>
-          <div>
-            <h3 class="text-sm font-bold text-white">Your Canvas is Empty</h3>
-            <p class="text-xs text-slate-400 max-w-sm mx-auto mt-1 leading-relaxed">
-              Find clinical terms in the **Crosswalk Term** tab first, then pin them to start building your systematic search strategy block.
-            </p>
-          </div>
-          <button onclick="switchTab('crosswalk')" class="bg-slate-950 hover:bg-slate-850 border border-slate-800 text-teal-400 font-bold px-4 py-2.5 rounded-xl text-xs transition">
-            Go to Term Crosswalk
-          </button>
-        </div>
-
-        <!-- DYNAMIC STRATEGY CANVAS CONTENT (CONTAINED WHEN CONCEPTS PRESENT) -->
-        <div id="builder-content-container" class="hidden flex flex-col gap-6">
-          
-          <!-- COMPILED SYSTEMATIC BLOCK QUERY -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 relative">
-            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div class="flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Compiled Master Query (<span id="compiled-db-title" class="text-teal-300">PubMed</span>)
-                </h3>
-              </div>
-              
-              <button 
-                onclick="copyMasterQuery()"
-                class="bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                Copy Entire Query
-              </button>
-            </div>
-
-            <pre id="compiled-query-block" class="bg-slate-950 p-4.5 rounded-xl border border-slate-850 font-mono text-[11px] leading-relaxed text-teal-300 overflow-x-auto whitespace-pre-wrap select-all">
-              <!-- Compiled content here -->
-            </pre>
-
-            <div class="flex items-center justify-between pt-2">
-              <span class="text-[10px] text-slate-500 italic">💡 Paste directly into your database search workspace</span>
-              <button onclick="clearBuilder()" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                Clear All Concepts
-              </button>
-            </div>
-          </div>
-
-          <!-- PINNED CONCEPT LIST -->
-          <div class="flex flex-col gap-4">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Active Concept Layers</h3>
-            <div id="pinned-concepts-list" class="flex flex-col gap-4">
-              <!-- Pinned concept items will be injected here -->
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- TAB 3: GUIDE & SYNTAX -->
-      <section id="tab-panel-help" class="hidden flex flex-col gap-6" role="tabpanel" aria-labelledby="tab-btn-help">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <h2 class="text-base font-bold text-white flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-teal-400"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            Systematic Search Strategy Guide
-          </h2>
-          <p class="text-xs text-slate-400 mt-1">Key methodologies of database search architectures</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Vocabulary explanation -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow flex flex-col gap-3">
-            <h3 class="text-sm font-bold text-teal-300 flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-              Controlled Vocabularies
-            </h3>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              <strong>MeSH (Medical Subject Headings)</strong> is the National Library of Medicine's (NLM) curated indexing thesaurus. Major databases assign unified descriptors to articles regardless of an author's custom spelling choice.
-            </p>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              For instance, using the descriptor <strong>Kidney Calculi</strong> automatically retrieves articles written with terms like <em>kidney stone</em>, <em>nephrolithiasis</em>, or <em>renal calculus</em>, resulting in much higher search sensitivity.
-            </p>
-          </div>
-
-          <!-- Explode explanation -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow flex flex-col gap-3">
-            <h3 class="text-sm font-bold text-teal-300 flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line><line x1="12" y1="8" x2="12" y2="16"></line></svg>
-              Explode & Focus Modifiers
-            </h3>
-            <div class="flex flex-col gap-3 text-xs text-slate-300">
-              <div>
-                <strong class="text-white block">Exploding a Term:</strong>
-                Subject headings are nested hierarchically. Exploding a parent term searches for that concept, plus all narrower indexing subdivisions (children) automatically.
-              </div>
-              <div>
-                <strong class="text-white block">Major Concept Filter:</strong>
-                Limits search parameters only to citations where your targeted descriptor is identified by indexers as the central topic of the research paper.
-              </div>
-            </div>
-          </div>
-
-          <!-- Syntax comparison cheat sheet -->
-          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow md:col-span-2 flex flex-col gap-3">
-            <h3 class="text-sm font-bold text-teal-300 flex items-center gap-1.5">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line></svg>
-              Standardized Database Syntaxes
-            </h3>
-            <div class="overflow-x-auto">
-              <table class="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr class="border-b border-slate-800 text-slate-400 font-semibold">
-                    <th class="py-2.5 pr-4">Search Field Mode</th>
-                    <th class="py-2.5 px-4">PubMed (NCBI)</th>
-                    <th class="py-2.5 px-4">MEDLINE (Ovid)</th>
-                    <th class="py-2.5 pl-4">CINAHL (EBSCO)</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-800 text-slate-300 font-mono text-[11px]">
-                  <tr>
-                    <td class="py-3.5 pr-4 text-slate-200 font-sans">Standard Descriptor</td>
-                    <td class="py-3.5 px-4 text-emerald-400">"Neoplasms"[Mesh]</td>
-                    <td class="py-3.5 px-4 text-blue-400">Neoplasms/</td>
-                    <td class="py-3.5 pl-4 text-indigo-400">MH "Neoplasms"</td>
-                  </tr>
-                  <tr>
-                    <td class="py-3.5 pr-4 text-slate-200 font-sans">Exploded Term</td>
-                    <td class="py-3.5 px-4 text-emerald-400">"Neoplasms"[Mesh] <span class="font-sans text-[10px] text-slate-500">(Default auto-explode)</span></td>
-                    <td class="py-3.5 px-4 text-blue-400">exp Neoplasms/</td>
-                    <td class="py-3.5 pl-4 text-indigo-400">MH "Neoplasms+"</td>
-                  </tr>
-                  <tr>
-                    <td class="py-3.5 pr-4 text-slate-200 font-sans">Major Topic focus</td>
-                    <td class="py-3.5 px-4 text-emerald-400">"Neoplasms"[Majr]</td>
-                    <td class="py-3.5 px-4 text-blue-400">*Neoplasms/</td>
-                    <td class="py-3.5 pl-4 text-indigo-400">MM "Neoplasms"</td>
-                  </tr>
-                  <tr>
-                    <td class="py-3.5 pr-4 text-slate-200 font-sans">Title/Abstract Keyword Search</td>
-                    <td class="py-3.5 px-4 text-emerald-400">"breast cancer"[tiab]</td>
-                    <td class="py-3.5 px-4 text-blue-400">(breast cancer).ti,ab,kf.</td>
-                    <td class="py-3.5 pl-4 text-indigo-400">TI "breast cancer" OR AB "breast cancer"</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
-
-    </div>
-  </main>
-
-  <!-- ========================================== -->
-  <!-- TOAST NOTIFICATION CONTAINER -->
-  <!-- ========================================== -->
-  <div id="toast-notification" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 ease-out bg-teal-500 text-slate-950 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold z-50">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-    <span id="toast-text">Text copied!</span>
-  </div>
-
-  <!-- ========================================== -->
-  <!-- FOOTER -->
-  <!-- ========================================== -->
-  <footer class="bg-slate-950 border-t border-slate-900 text-slate-500 py-6 text-center text-xs mt-auto">
-    <p>© 2026 Medical Subject Heading Translation Tool. Powered by National Library of Medicine (NLM) Catalogs.</p>
-    <p class="mt-1">Formulated specifically for clinical evidence synthesis search engineers.</p>
-  </footer>
-
-  <!-- ========================================== -->
-  <!-- JAVASCRIPT LOGIC BLOCK -->
-  <!-- ========================================== -->
-  <script>
-    // --- DICTIONARY DATA SOURCE ---
-    const MEDICAL_CROSSWALK_DATABASE = {
-      "breast cancer": {
-        conceptName: "Breast Cancer",
-        meshTerm: "Breast Neoplasms",
-        meshScopeNote: "Tumors or cancer of the human breast, typically categorized into lobular or ductal carcinomas.",
-        meshYear: "1971",
-        meshTreeStructure: ["Diseases", "Neoplasms", "Neoplasms by Site", "Breast Neoplasms"],
-        meshSynonyms: ["Breast Cancer", "Breast Oncology", "Mammary Cancer", "Human Breast Neoplasm"],
-        cinahlTerm: "Breast Neoplasms",
-        cinahlScopeNote: "Matched directly to CINAHL Subject Headings for breast tissue neoplasms.",
-        suggestedKeywords: ["breast cancer*", "breast neoplasm*", "mammary oncology", "breast tumor*"]
-      },
-      "type 2 diabetes": {
-        conceptName: "Type 2 Diabetes",
-        meshTerm: "Diabetes Mellitus, Type 2",
-        meshScopeNote: "A metabolic disorder characterized by high blood glucose levels caused by insulin resistance and relative insulin deficiency.",
-        meshYear: "1987",
-        meshTreeStructure: ["Nutritional and Metabolic Diseases", "Diabetes Mellitus", "Diabetes Mellitus, Type 2"],
-        meshSynonyms: ["Type 2 Diabetes", "NIDDM", "Adult-Onset Diabetes", "Ketosis-Resistant Diabetes"],
-        cinahlTerm: "Diabetes Mellitus, Type 2",
-        cinahlScopeNote: "Matched directly to CINAHL indexing schema for Non-Insulin Dependent Diabetes.",
-        suggestedKeywords: ["type 2 diabetes*", "t2dm", "adult onset diabetes*", "noninsulin dependent diabetes*"]
-      },
-      "asthma": {
-        conceptName: "Asthma",
-        meshTerm: "Asthma",
-        meshScopeNote: "A chronic inflammatory disease of the respiratory airways characterized by intermittent bronchial spasms and obstruction.",
-        meshYear: "1966",
-        meshTreeStructure: ["Respiratory Tract Diseases", "Bronchial Diseases", "Asthma"],
-        meshSynonyms: ["Bronchial Asthma", "Reactive Airway Disease", "Airway Hyperreactivity"],
-        cinahlTerm: "Asthma",
-        cinahlScopeNote: "Coincides symmetrically with CINAHL pulmonary index listings.",
-        suggestedKeywords: ["asthma*", "bronchial spasm*", "reactive airway*", "wheez*"]
-      },
-      "stroke": {
-        conceptName: "Stroke",
-        meshTerm: "Stroke",
-        meshScopeNote: "Sudden loss of neurological function caused by an impairment of cerebral blood flow, typically ischemic or hemorrhagic.",
-        meshYear: "1985",
-        meshTreeStructure: ["Nervous System Diseases", "Brain Diseases", "Cerebrovascular Disorders", "Stroke"],
-        meshSynonyms: ["Cerebrovascular Accident", "CVA", "Apoplexy", "Brain Infarction"],
-        cinahlTerm: "Stroke",
-        cinahlScopeNote: "Matches EBSCO nursing index records for cerebral vascular accidents.",
-        suggestedKeywords: ["stroke*", "cerebrovascular accident*", "cva*", "brain infarct*", "ischemic attack*"]
-      },
-      "dementia": {
-        conceptName: "Dementia",
-        meshTerm: "Dementia",
-        meshScopeNote: "An acquired, progressive decline in cognitive functions severe enough to interfere with daily social or occupational function.",
-        meshYear: "1983",
-        meshTreeStructure: ["Nervous System Diseases", "Brain Diseases", "Dementia"],
-        meshSynonyms: ["Cognitive Decline", "Chronic Brain Syndrome", "Senile Dementia", "Mild Cognitive Impairment"],
-        cinahlTerm: "Dementia",
-        cinahlScopeNote: "Matched directly to CINAHL cognitive impairment definitions.",
-        suggestedKeywords: ["dementia*", "cognitive decline*", "senile decay*", "alzheimer*"]
-      },
-      "pregnancy": {
-        conceptName: "Pregnancy",
-        meshTerm: "Pregnancy",
-        meshScopeNote: "The state of carrying a developing embryo or fetus within the female body.",
-        meshYear: "1966",
-        meshTreeStructure: ["Reproductive and Urinary Physiology", "Pregnancy"],
-        meshSynonyms: ["Gestation", "Maternity", "Prenatal Period", "Antenatal State"],
-        cinahlTerm: "Pregnancy",
-        cinahlScopeNote: "Identified with gestational states in allied health cataloging.",
-        suggestedKeywords: ["pregnan*", "gestat*", "matern*", "prenatal*", "antenatal*"]
-      },
-      "midwifery": {
-        conceptName: "Midwifery",
-        meshTerm: "Midwifery",
-        meshScopeNote: "The practice of assisting women in childbirth, prenatal care, and postpartum family planning.",
-        meshYear: "1966",
-        meshTreeStructure: ["Health Occupations", "Nursing", "Midwifery"],
-        meshSynonyms: ["Nurse Midwife", "Obstetric Midwifery", "Traditional Birth Attendants"],
-        cinahlTerm: "Midwifery",
-        cinahlScopeNote: "Extremely vital and extensively indexed within CINAHL Nursing classifications.",
-        suggestedKeywords: ["midwi*", "nurse midwife*", "birth attendant*", "obstetric nurs*"]
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (e) {
+        console.error("Firebase auth failed, running in memory-only mode:", e);
       }
     };
 
-    // --- APPLICATION STATE ---
-    let currentResult = null;
-    let crosswalkHistory = [];
-    let pinnedConcepts = [];
-    let activeTab = 'crosswalk';
-    let databaseView = 'pubmed'; // pubmed | medline | cinahl
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, (usr) => {
+      setUser(usr);
+    });
+    return () => unsubscribe();
+  }, []);
 
-    // --- INITIALIZE SHORTCUTS ---
-    function initializeShortcuts() {
-      const container = document.getElementById('shortcuts-container');
-      container.innerHTML = '';
-      
-      Object.keys(MEDICAL_CROSSWALK_DATABASE).forEach(key => {
-        const item = MEDICAL_CROSSWALK_DATABASE[key];
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = "text-[11px] bg-slate-950 border border-slate-800 text-slate-300 px-2.5 py-1.5 rounded-lg hover:border-teal-500/50 hover:text-white transition-all text-left";
-        btn.textContent = item.conceptName;
-        btn.onclick = () => performLookup(key);
-        container.appendChild(btn);
-      });
+  // --- FIRESTORE REALTIME SYNC (RULE 3 & RULE 1 Safeguards) ---
+  useEffect(() => {
+    if (!firebaseEnabled || !user) return;
+
+    // Public collection path as per Rule 1: /artifacts/{appId}/public/data/{collectionName}
+    const publicDataCollection = collection(db, 'artifacts', appId, 'public', 'data', 'saved_strategies');
+    
+    const unsubscribe = onSnapshot(
+      publicDataCollection,
+      (snapshot) => {
+        const loaded = [];
+        snapshot.forEach((doc) => {
+          loaded.push({ id: doc.id, ...doc.data() });
+        });
+        setSavedStrategies(loaded);
+      },
+      (error) => {
+        console.error("Firestore loading error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // --- SAVE STRATEGY TO CLOUD ---
+  const saveStrategyToCloud = async () => {
+    if (!firebaseEnabled || !user) {
+      showAlert("Offline Mode", "Cloud saving is unavailable. Firebase configuration was not found.");
+      return;
+    }
+    if (!strategyTitle.trim()) {
+      showAlert("Title Required", "Please enter a descriptive title for this search strategy.");
+      return;
+    }
+    if (concepts.length === 0) {
+      showAlert("Strategy Empty", "Please add at least one concept to your workspace before saving.");
+      return;
     }
 
-    // --- RUN SEARCH / TRANSLATION LOOKUP ---
-    function performLookup(keyword) {
-      const cleanKeyword = keyword.trim().toLowerCase();
-      let matchedData = null;
-
-      // Attempt dictionary match
-      if (MEDICAL_CROSSWALK_DATABASE[cleanKeyword]) {
-        matchedData = { ...MEDICAL_CROSSWALK_DATABASE[cleanKeyword] };
-      } else {
-        // Fallback generator for custom non-dictionary terms
-        const titleCased = titleCase(keyword);
-        matchedData = {
-          conceptName: titleCased,
-          meshTerm: titleCased,
-          meshScopeNote: `Auto-generated translation template for custom user term. Double-check actual NLM MeSH definitions prior to final systematic synthesis submission.`,
-          meshYear: "N/A",
-          meshTreeStructure: ["User Search Layer", titleCased],
-          meshSynonyms: [titleCased, `${keyword}s`],
-          cinahlTerm: titleCased,
-          cinahlScopeNote: "Auto-aligned concept layer mapping matching input criteria exactly.",
-          suggestedKeywords: [`${keyword.toLowerCase()}*`, `"${keyword.toLowerCase()}"`]
-        };
-      }
-
-      currentResult = matchedData;
-
-      // Add to History logs
-      if (!crosswalkHistory.some(h => h.meshTerm.toLowerCase() === matchedData.meshTerm.toLowerCase())) {
-        crosswalkHistory.unshift(matchedData);
-        if (crosswalkHistory.length > 8) crosswalkHistory.pop();
-        updateHistoryUI();
-      }
-
-      // Display Crosswalk Results
-      document.getElementById('crosswalk-placeholder').classList.add('hidden');
-      document.getElementById('crosswalk-result-card').classList.remove('hidden');
-
-      // Update basic fields
-      document.getElementById('result-mesh-term').textContent = matchedData.meshTerm;
-      document.getElementById('result-user-keyword').textContent = keyword;
-      document.getElementById('result-mesh-year').textContent = `Intro: ${matchedData.meshYear}`;
-      document.getElementById('result-mesh-note').textContent = matchedData.meshScopeNote;
-      document.getElementById('result-cinahl-term').textContent = `Aligned Descriptor: ${matchedData.cinahlTerm}`;
-      document.getElementById('result-cinahl-note').textContent = matchedData.cinahlScopeNote;
-
-      // Render Synonyms
-      const synonymsContainer = document.getElementById('result-synonyms');
-      synonymsContainer.innerHTML = '';
-      matchedData.meshSynonyms.forEach(syn => {
-        const badge = document.createElement('span');
-        badge.className = "text-[11px] bg-slate-950 border border-slate-800 text-slate-300 px-2.5 py-1 rounded-md font-mono";
-        badge.textContent = syn;
-        synonymsContainer.appendChild(badge);
+    setIsSaving(true);
+    try {
+      const targetDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'saved_strategies'));
+      await setDoc(targetDocRef, {
+        title: strategyTitle,
+        concepts: JSON.parse(JSON.stringify(concepts)), // Deep copy serializable state
+        createdAt: new Date().toISOString(),
+        userId: user.uid,
+        userDisplay: `User-${user.uid}`
       });
+      setStrategyTitle('');
+      showAlert("Strategy Saved", "Your systematic search strategy was saved to the collaborative cloud vault.");
+    } catch (e) {
+      console.error("Error saving to Firestore:", e);
+      showAlert("Cloud Sync Error", "Failed to save strategy. Ensure firestore rules conform to permissions.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
-      // Render Tree Hierarchy
-      const treeContainer = document.getElementById('result-tree');
-      treeContainer.innerHTML = '';
-      matchedData.meshTreeStructure.forEach((node, idx) => {
-        const div = document.createElement('div');
-        div.className = "flex items-center gap-1 text-slate-300";
-        div.innerHTML = `<span class="text-teal-400 font-bold">${">".repeat(idx)}</span> <span>${node}</span>`;
-        treeContainer.appendChild(div);
-      });
+  // --- LOAD STRATEGY FROM CLOUD ---
+  const loadStrategy = (strategy) => {
+    setConcepts(strategy.concepts || []);
+    setActiveTab('builder');
+    showAlert("Loaded Successfully", `Search strategy "${strategy.title}" has been loaded onto your canvas workspace.`);
+  };
 
-      // Compute and inject single syntax lines
-      document.getElementById('code-pm-std').textContent = `"${matchedData.meshTerm}"[Mesh]`;
-      document.getElementById('code-pm-maj').textContent = `"${matchedData.meshTerm}"[Majr]`;
-      document.getElementById('code-pm-sys').textContent = `("${matchedData.meshTerm}"[Mesh] OR ${matchedData.suggestedKeywords.map(k => `"${k}"[tiab]`).join(' OR ')})`;
+  // --- DELETE STRATEGY ---
+  const deleteStrategy = async (id, event) => {
+    event.stopPropagation();
+    if (!firebaseEnabled) return;
+    try {
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'saved_strategies', id);
+      await deleteDoc(docRef);
+      showAlert("Deleted", "The search strategy was removed from the database.");
+    } catch (e) {
+      console.error("Deletion error:", e);
+    }
+  };
 
-      document.getElementById('code-med-std').textContent = `exp ${matchedData.meshTerm}/`;
-      document.getElementById('code-med-maj').textContent = `${matchedData.meshTerm}/`;
-      document.getElementById('code-med-sys').textContent = `(exp ${matchedData.meshTerm}/ or (${matchedData.suggestedKeywords.map(k => k.replace(/\*/g, '$')).join(' or ')}).ti,ab,kf.)`;
+  // --- CALL GEMINI CHAT COMPLETION FOR CROSSWALK ---
+  const queryCrosswalk = async (keyword) => {
+    if (!keyword.trim()) return;
+    
+    setIsLoading(true);
+    setStatusMessage('Analyzing search term concepts...');
+    
+    const delay = (ms) => new Promise(res => setTimeout(res, ms));
+    const apiKey = ""; // Runtime-injected environment key
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
-      document.getElementById('code-cin-std').textContent = `MH "${matchedData.cinahlTerm}+"`;
-      document.getElementById('code-cin-maj').textContent = `MH "${matchedData.cinahlTerm}"`;
-      document.getElementById('code-cin-sys').textContent = `(MH "${matchedData.cinahlTerm}+" OR ${matchedData.suggestedKeywords.map(k => `"${k}"`).join(' OR ')})`;
-
-      // Scroll to result on small viewports
-      if (window.innerWidth < 1024) {
-        document.getElementById('crosswalk-result-card').scrollIntoView({ behavior: 'smooth' });
+    const promptText = `Analyze the clinical research search keyword: "${keyword}". Find the primary Medical Subject Heading (MeSH) and crosswalk it with the best-fitting CINAHL Subject Heading. Support your mappings with scope notes, entry year, relevant synonyms, and candidate Title/Abstract text-word terms for systematic search building.
+    
+    Return your response strictly in the following JSON format:
+    {
+      "conceptName": "Short descriptive name of the concept",
+      "meshTerm": "Official MeSH Heading",
+      "meshScopeNote": "Official MeSH scope note or concise conceptual definition",
+      "meshYear": "Year MeSH was introduced",
+      "meshTreeStructure": ["Tree node level 1", "Tree node level 2", "Tree node level 3"],
+      "meshSynonyms": ["synonym A", "synonym B", "synonym C"],
+      "cinahlTerm": "Official CINAHL Subject Heading or equivalent",
+      "cinahlScopeNote": "CINAHL scope definition or comparison with MeSH",
+      "cinahlSynonyms": ["CINAHL synonym 1", "CINAHL synonym 2"],
+      "suggestedKeywords": ["keyword1*", "keyword2*", "exact phrase"],
+      "searchSyntaxes": {
+        "pubmed": {
+          "standard": "\\"Official MeSH Heading\\"[Mesh]",
+          "major": "\\"Official MeSH Heading\\"[Majr]",
+          "systematic": "(\\"Official MeSH Heading\\"[Mesh] OR \\"keyword1*\\"[tiab] OR \\"keyword2*\\"[tiab])"
+        },
+        "ovidMedline": {
+          "explode": "exp Official MeSH Heading/",
+          "exact": "Official MeSH Heading/",
+          "major": "*Official MeSH Heading/",
+          "systematic": "(exp Official MeSH Heading/ or (keyword1$ or keyword2$).ti,ab,kf.)"
+        },
+        "cinahl": {
+          "explode": "MH \\"Official CINAHL Subject Heading+\\"",
+          "exact": "MH \\"Official CINAHL Subject Heading\\"",
+          "major": "MM \\"Official CINAHL Subject Heading\\"",
+          "systematic": "(MH \\"Official CINAHL Subject Heading+\\" OR \\"keyword1*\\" OR \\"keyword2*\\")"
+        }
       }
-    }
+    }`;
 
-    // --- FORM HANDLER ---
-    function handleSearchSubmit(e) {
-      e.preventDefault();
-      const input = document.getElementById('keyword-input');
-      performLookup(input.value);
-    }
-
-    // --- UPDATE HISTORY UI ---
-    function updateHistoryUI() {
-      const container = document.getElementById('history-container');
-      if (crosswalkHistory.length === 0) {
-        container.innerHTML = '<p class="text-xs text-slate-500 italic">No search history in this session yet.</p>';
-        return;
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }],
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            conceptName: { type: "STRING" },
+            meshTerm: { type: "STRING" },
+            meshScopeNote: { type: "STRING" },
+            meshYear: { type: "STRING" },
+            meshTreeStructure: { type: "ARRAY", items: { type: "STRING" } },
+            meshSynonyms: { type: "ARRAY", items: { type: "STRING" } },
+            cinahlTerm: { type: "STRING" },
+            cinahlScopeNote: { type: "STRING" },
+            cinahlSynonyms: { type: "ARRAY", items: { type: "STRING" } },
+            suggestedKeywords: { type: "ARRAY", items: { type: "STRING" } },
+            searchSyntaxes: {
+              type: "OBJECT",
+              properties: {
+                pubmed: {
+                  type: "OBJECT",
+                  properties: {
+                    standard: { type: "STRING" },
+                    major: { type: "STRING" },
+                    systematic: { type: "STRING" }
+                  }
+                },
+                ovidMedline: {
+                  type: "OBJECT",
+                  properties: {
+                    explode: { type: "STRING" },
+                    exact: { type: "STRING" },
+                    major: { type: "STRING" },
+                    systematic: { type: "STRING" }
+                  }
+                },
+                cinahl: {
+                  type: "OBJECT",
+                  properties: {
+                    explode: { type: "STRING" },
+                    exact: { type: "STRING" },
+                    major: { type: "STRING" },
+                    systematic: { type: "STRING" }
+                  }
+                }
+              }
+            }
+          },
+          required: ["conceptName", "meshTerm", "meshScopeNote", "meshSynonyms", "cinahlTerm", "suggestedKeywords", "searchSyntaxes"]
+        }
       }
-      
-      container.innerHTML = '';
-      crosswalkHistory.forEach(item => {
-        const div = document.createElement('div');
-        div.className = "bg-slate-950 hover:bg-slate-850 border border-slate-850 p-3 rounded-xl cursor-pointer flex items-center justify-between group transition-all duration-200";
-        div.onclick = () => {
-          document.getElementById('keyword-input').value = item.conceptName;
-          performLookup(item.conceptName);
-        };
-        div.innerHTML = `
-          <div>
-            <p class="text-xs font-bold text-teal-300 group-hover:text-teal-400 transition-colors">${item.meshTerm}</p>
-            <p class="text-[10px] text-slate-500 italic">"${item.conceptName}"</p>
-          </div>
-          <svg class="w-3.5 h-3.5 text-slate-600 group-hover:text-slate-400 transition" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        `;
-        container.appendChild(div);
-      });
-    }
+    };
 
-    // --- TAB NAVIGATION SWITCH ---
-    function switchTab(targetId) {
-      activeTab = targetId;
-      
-      // Update Tab panel visibility
-      ['crosswalk', 'builder', 'help'].forEach(id => {
-        const btn = document.getElementById(`tab-btn-${id}`);
-        const panel = document.getElementById(`tab-panel-${id}`);
-        
-        if (id === targetId) {
-          btn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition bg-teal-500 text-slate-950 shadow";
-          btn.setAttribute('aria-selected', 'true');
-          panel.classList.remove('hidden');
+    // Implement Exponential Backoff (Up to 5 Retries)
+    let retries = 5;
+    let delayMs = 1000;
+    let success = false;
+    let responseData = null;
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        if (attempt > 0) {
+          setStatusMessage(`Server busy. Retrying in ${delayMs / 1000}s... (Attempt ${attempt + 1}/${retries})`);
+          await delay(delayMs);
+          delayMs *= 2; // double delay
         } else {
-          btn.className = "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition text-slate-400 hover:text-white";
-          btn.setAttribute('aria-selected', 'false');
-          panel.classList.add('hidden');
+          setStatusMessage('Retrieving authority records and compiling mappings...');
         }
-      });
 
-      if (targetId === 'builder') {
-        renderBuilderCanvas();
-      }
-    }
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-    // --- PIN CONCEPT TO BUILDER CANVAS ---
-    function pinCurrentToBuilder() {
-      if (!currentResult) return;
+        if (!response.ok) {
+          throw new Error(`API Status: ${response.status}`);
+        }
 
-      // Avoid duplication
-      const exists = pinnedConcepts.some(c => c.meshTerm.toLowerCase() === currentResult.meshTerm.toLowerCase());
-      if (exists) {
-        showToast("Concept is already active on your Canvas!");
-        return;
-      }
-
-      // Structure new pinned concept
-      const conceptLayer = {
-        id: 'layer-' + Date.now(),
-        conceptName: currentResult.conceptName,
-        meshTerm: currentResult.meshTerm,
-        cinahlTerm: currentResult.cinahlTerm,
-        suggestedKeywords: [...currentResult.suggestedKeywords],
-        isExplode: true,
-        isMajor: false,
-        isSystematic: true,
-        operator: 'AND'
-      };
-
-      pinnedConcepts.push(conceptLayer);
-      updateBadgeCount();
-      showToast("Pinned to search Strategy Builder!");
-      switchTab('builder');
-    }
-
-    // --- RENDER BUILDER WORKSPACE CANVAS ---
-    function renderBuilderCanvas() {
-      const emptyState = document.getElementById('builder-empty-placeholder');
-      const canvasContent = document.getElementById('builder-content-container');
-      
-      if (pinnedConcepts.length === 0) {
-        emptyState.classList.remove('hidden');
-        canvasContent.classList.add('hidden');
-        return;
-      }
-
-      emptyState.classList.add('hidden');
-      canvasContent.classList.remove('hidden');
-
-      // Update master query compilation view
-      compileMasterQueryText();
-
-      // Render items
-      const container = document.getElementById('pinned-concepts-list');
-      container.innerHTML = '';
-
-      pinnedConcepts.forEach((concept, index) => {
-        const itemDiv = document.createElement('div');
-        itemDiv.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg transition-all duration-200";
+        const result = await response.json();
+        const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
         
-        let operatorSection = '';
-        if (index > 0) {
-          operatorSection = `
-            <div class="bg-slate-950 border-b border-slate-850 px-4 py-2 flex items-center gap-2">
-              <span class="text-[9px] uppercase font-extrabold text-slate-500">Boolean connector link to previous block:</span>
-              <div class="flex bg-slate-900 p-0.5 rounded-lg border border-slate-800">
-                ${['AND', 'OR', 'NOT'].map(op => `
-                  <button 
-                    onclick="updateConceptSetting('${concept.id}', 'operator', '${op}')" 
-                    class="text-[10px] px-2.5 py-1 rounded-md font-extrabold transition-all duration-150 ${concept.operator === op ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'}"
-                  >
-                    ${op}
-                  </button>
-                `).join('')}
-              </div>
-            </div>
-          `;
+        if (responseText) {
+          responseData = JSON.parse(responseText);
+          success = true;
+          break;
+        } else {
+          throw new Error('Malformed API response structure.');
         }
+      } catch (err) {
+        console.error(`Attempt ${attempt + 1} failed:`, err);
+        if (attempt === retries - 1) {
+          setIsLoading(false);
+          showAlert("Analysis Error", "The medical database indexing AI is currently experiencing high load. Please check your network connection and try again.");
+          return;
+        }
+      }
+    }
 
-        itemDiv.innerHTML = `
-          ${operatorSection}
-          <div class="p-5 flex flex-col gap-4">
-            
-            <div class="flex items-start justify-between">
-              <div>
-                <span class="text-[10px] bg-slate-950 border border-slate-800 text-teal-400 px-2.5 py-0.5 rounded-md font-mono uppercase tracking-wider">Concept Block ${index + 1}</span>
-                <h4 class="text-base font-bold text-white mt-1.5 flex items-center gap-2">
-                  ${concept.meshTerm} <span class="text-xs text-slate-500 font-normal">(${concept.conceptName})</span>
-                </h4>
+    if (success && responseData) {
+      setResultData(responseData);
+      // Append to local history list
+      setCrosswalkHistory(prev => {
+        const exists = prev.some(h => h.meshTerm.toLowerCase() === responseData.meshTerm.toLowerCase());
+        if (exists) return prev;
+        return [responseData, ...prev].slice(0, 10);
+      });
+    }
+    setIsLoading(false);
+  };
+
+  // --- SAFE CLIPBOARD ACTION ---
+  const copyToClipboard = (text, elementId) => {
+    try {
+      const tempElement = document.createElement('textarea');
+      tempElement.value = text;
+      tempElement.style.position = 'fixed';
+      tempElement.style.opacity = '0';
+      document.body.appendChild(tempElement);
+      tempElement.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempElement);
+      
+      setCopiedId(elementId);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  // --- ACTIONS FOR CONCEPTS IN SEARCH BUILDER CANVAS ---
+  const addConceptToBuilder = (concept) => {
+    // Check if already exists in active canvas, prevent duplicate mesh mapping
+    const exists = concepts.some(c => c.meshTerm === concept.meshTerm);
+    if (exists) {
+      showAlert("Duplicate Concept", "This indexing term is already active in your Search Strategy Builder workspace.");
+      return;
+    }
+
+    const defaultBuilderConcept = {
+      id: crypto.randomUUID(),
+      conceptName: concept.conceptName,
+      meshTerm: concept.meshTerm,
+      cinahlTerm: concept.cinahlTerm,
+      suggestedKeywords: [...concept.suggestedKeywords],
+      isSystematic: true,
+      isExplode: true,
+      isMajor: false,
+      operator: 'AND' // Default combination operator for next terms
+    };
+
+    setConcepts(prev => [...prev, defaultBuilderConcept]);
+    setActiveTab('builder');
+    
+    // Quick notification at bottom
+    const anchor = document.getElementById('strategy-builder-canvas');
+    if (anchor) anchor.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const removeConcept = (id) => {
+    setConcepts(prev => prev.filter(c => c.id !== id));
+  };
+
+  const updateConceptSetting = (id, key, value) => {
+    setConcepts(prev => prev.map(c => c.id === id ? { ...c, [key]: value } : c));
+  };
+
+  const handleKeywordChange = (id, idx, newValue) => {
+    setConcepts(prev => prev.map(c => {
+      if (c.id === id) {
+        const updatedKws = [...c.suggestedKeywords];
+        updatedKws[idx] = newValue;
+        return { ...c, suggestedKeywords: updatedKws };
+      }
+      return c;
+    }));
+  };
+
+  const addCustomKeyword = (id) => {
+    setConcepts(prev => prev.map(c => {
+      if (c.id === id) {
+        return { ...c, suggestedKeywords: [...c.suggestedKeywords, 'new_keyword*'] };
+      }
+      return c;
+    }));
+  };
+
+  const removeKeyword = (id, idx) => {
+    setConcepts(prev => prev.map(c => {
+      if (c.id === id) {
+        const updatedKws = c.suggestedKeywords.filter((_, i) => i !== idx);
+        return { ...c, suggestedKeywords: updatedKws };
+      }
+      return c;
+    }));
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans antialiased">
+      {/* HEADER SECTION */}
+      <header className="bg-slate-950 border-b border-slate-800 shrink-0 sticky top-0 z-40 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-teal-500/10 text-teal-400 p-2 rounded-xl border border-teal-500/30">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                Biomedical Search Crosswalk <span className="text-xs bg-teal-500/20 text-teal-300 font-semibold px-2 py-0.5 rounded-full border border-teal-500/30">MeSH v2.5</span>
+              </h1>
+              <p className="text-xs text-slate-400">Systematic query formulation for PubMed, MEDLINE (Ovid), and CINAHL</p>
+            </div>
+          </div>
+
+          <nav className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+            <button 
+              onClick={() => setActiveTab('crosswalk')} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${activeTab === 'crosswalk' ? 'bg-teal-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Search className="w-3.5 h-3.5" />
+              1. Crosswalk Term
+            </button>
+            <button 
+              onClick={() => setActiveTab('builder')} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${activeTab === 'builder' ? 'bg-teal-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'} relative`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              2. Strategy Builder
+              {concepts.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-rose-500 text-white font-bold w-4 h-4 rounded-full text-[10px] flex items-center justify-center animate-pulse">
+                  {concepts.length}
+                </span>
+              )}
+            </button>
+            <button 
+              onClick={() => setActiveTab('cloud')} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${activeTab === 'cloud' ? 'bg-teal-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              Cloud Vault
+            </button>
+            <button 
+              onClick={() => setActiveTab('help')} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition ${activeTab === 'help' ? 'bg-teal-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Guide
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      {/* SYSTEM WARNING BANNER FOR OFFLINE CLOUD SERVICES */}
+      {!firebaseEnabled && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 py-2 px-4 text-center">
+          <p className="text-xs text-amber-300 flex items-center justify-center gap-2">
+            <Info className="w-4 h-4" /> Cloud strategy storage is in local memory. Connect a Firebase config to enable universal strategy persistence.
+          </p>
+        </div>
+      )}
+
+      {/* CORE WORKFLOW AREA */}
+      <main className="grow max-w-7xl w-full mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* LEFT COLUMN: ACTIVE SEARCH INPUT & TRANSLATOR */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          
+          {/* SEARCH TERMINOLOGY INPUT CARD */}
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-wide uppercase text-slate-400 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-teal-400" /> Clinical Concept Input
+              </h2>
+              <span className="text-[11px] bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400">Natural Language</span>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Enter a medical concept, patient population, intervention, or clinical jargon. The system maps it to validated controlled vocabularies.
+            </p>
+
+            <form onSubmit={(e) => { e.preventDefault(); queryCrosswalk(keywordInput); }} className="flex flex-col gap-2">
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={keywordInput}
+                  onChange={(e) => setKeywordInput(e.target.value)}
+                  placeholder="e.g. breast cancer, diabetic neuropathy, midwifery..."
+                  className="w-full bg-slate-900 text-white placeholder-slate-500 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-teal-500 transition focus:ring-1 focus:ring-teal-500"
+                  disabled={isLoading}
+                />
+                <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
               </div>
 
-              <button onclick="removeConceptFromBuilder('${concept.id}')" class="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-950 transition">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <button 
+                type="submit"
+                disabled={isLoading || !keywordInput.trim()}
+                className="w-full bg-teal-500 text-slate-950 font-semibold py-2.5 px-4 rounded-xl text-xs hover:bg-teal-400 active:scale-95 transition disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 shadow"
+              >
+                {isLoading ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Analyzing Term...
+                  </>
+                ) : (
+                  <>
+                    Crosswalk Term
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
-            </div>
+            </form>
 
-            <!-- Modifiers selection grids -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-850">
+            {/* PRESET QUICK SUGGESTIONS */}
+            <div>
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-2">Example Search Concepts:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {['Type 2 Diabetes', 'Breast Cancer', 'Heart Attack', 'Midwives', 'Anorexia Nervosa'].map(term => (
+                  <button 
+                    key={term}
+                    onClick={() => { setKeywordInput(term); queryCrosswalk(term); }}
+                    className="text-[11px] bg-slate-900 border border-slate-800 text-slate-300 px-2.5 py-1 rounded-md hover:border-slate-700 hover:text-white transition"
+                    disabled={isLoading}
+                  >
+                    {term}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* LOCAL HISTORY LOG */}
+          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-3 grow-0">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+              <History className="w-3.5 h-3.5 text-teal-500" /> Recently Mapped Terms
+            </h3>
+            {crosswalkHistory.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">No search history in this session yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                {crosswalkHistory.map((hist, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => { setResultData(hist); setActiveTab('crosswalk'); }}
+                    className="bg-slate-900 hover:bg-slate-800/80 border border-slate-800 rounded-xl p-2.5 cursor-pointer transition flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-xs font-semibold text-teal-300">{hist.meshTerm}</p>
+                      <p className="text-[10px] text-slate-400 italic">"{hist.conceptName}"</p>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN: MAIN WORKSPACE INTERFACES (TAB CONTROLLERS) */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          
+          {/* TAB 1: CROSSWALK RESULTS VIEW */}
+          {activeTab === 'crosswalk' && (
+            <div className="flex flex-col gap-6">
               
-              <label class="flex items-start gap-2.5 cursor-pointer select-none">
-                <input 
-                  type="checkbox" 
-                  ${concept.isExplode ? 'checked' : ''} 
-                  ${concept.isMajor ? 'disabled' : ''}
-                  onchange="updateConceptSetting('${concept.id}', 'isExplode', this.checked)"
-                  class="accent-teal-500 rounded border-slate-800 mt-1"
-                />
-                <div>
-                  <span class="font-bold text-xs text-white block">Explode Descriptor (+)</span>
-                  <span class="text-[9px] text-slate-500">Include narrower terms under taxonomy tree</span>
+              {/* LOADING STATE PLACEHOLDER */}
+              {isLoading && (
+                <div className="bg-slate-950 border border-slate-800 rounded-3xl p-12 flex flex-col items-center justify-center text-center gap-4 min-h-[400px]">
+                  <div className="relative">
+                    <div className="w-16 h-16 border-4 border-slate-800 border-t-teal-500 rounded-full animate-spin"></div>
+                    <Database className="w-6 h-6 text-teal-400 absolute inset-0 m-auto" />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-semibold text-white">Cross-referencing Medical Registries</h4>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm">{statusMessage}</p>
+                  </div>
                 </div>
-              </label>
+              )}
 
-              <label class="flex items-start gap-2.5 cursor-pointer select-none">
-                <input 
-                  type="checkbox" 
-                  ${concept.isMajor ? 'checked' : ''} 
-                  onchange="handleMajorToggle('${concept.id}', this.checked)"
-                  class="accent-teal-500 rounded border-slate-800 mt-1"
-                />
-                <div>
-                  <span class="font-bold text-xs text-white block">Major Concept Focus (*)</span>
-                  <span class="text-[9px] text-slate-500">Filter to papers where this is the primary focus</span>
+              {/* WELCOME INSTRUCTION STATE */}
+              {!isLoading && !resultData && (
+                <div className="bg-slate-950 border border-slate-800 rounded-3xl p-12 flex flex-col items-center justify-center text-center gap-5 min-h-[400px]">
+                  <div className="w-16 h-16 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center text-teal-400 shadow">
+                    <Database className="w-8 h-8" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Controlled Vocabulary Crosswalk</h3>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto mt-2 leading-relaxed">
+                      Enter a biomedical keyword on the left. The AI Search Specialist will map your clinical term to its official **Medical Subject Headings (MeSH)**, **CINAHL Subject Headings**, and extract comprehensive search syntax codes.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-lg mt-4">
+                    <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-xs font-semibold text-teal-300 block">MeSH Mapping</span>
+                      <span className="text-[10px] text-slate-500">Official PubMed / MEDLINE index definitions</span>
+                    </div>
+                    <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-xs font-semibold text-sky-300 block">CINAHL Alignment</span>
+                      <span className="text-[10px] text-slate-500">Nursing & Allied Health index translations</span>
+                    </div>
+                    <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                      <span className="text-xs font-semibold text-emerald-300 block">Systematic Search</span>
+                      <span className="text-[10px] text-slate-500">Combines indexing + wildcards & phrases</span>
+                    </div>
+                  </div>
                 </div>
-              </label>
+              )}
 
-              <label class="flex items-start gap-2.5 cursor-pointer select-none">
-                <input 
-                  type="checkbox" 
-                  ${concept.isSystematic ? 'checked' : ''} 
-                  onchange="updateConceptSetting('${concept.id}', 'isSystematic', this.checked)"
-                  class="accent-teal-500 rounded border-slate-800 mt-1"
-                />
-                <div>
-                  <span class="font-bold text-xs text-white block">Add Title/Abstract Keywords</span>
-                  <span class="text-[9px] text-slate-500">Augment query with clinical synonyms</span>
+              {/* MAPPED RESULTS DATA SHEET */}
+              {!isLoading && resultData && (
+                <div className="flex flex-col gap-6">
+                  
+                  {/* TERM HEADER SUMMARY CARD */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-teal-500/5 rounded-full blur-2xl"></div>
+                    
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-teal-400 tracking-wider">Concept Alignment Found</span>
+                        <h2 className="text-2xl font-bold text-white mt-1">{resultData.meshTerm}</h2>
+                        <p className="text-xs text-slate-400 italic mt-0.5">Input term: "{resultData.conceptName}"</p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => addConceptToBuilder(resultData)}
+                          className="bg-teal-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs hover:bg-teal-400 active:scale-95 transition flex items-center gap-1.5 shadow"
+                        >
+                          <Plus className="w-4 h-4" /> Pin to Strategy Builder
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-800">
+                      
+                      {/* MeSH Vocabulary Box */}
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-teal-300 uppercase tracking-wide">MeSH Descriptor (MEDLINE)</span>
+                          {resultData.meshYear && (
+                            <span className="text-[10px] bg-slate-900 text-slate-400 px-2 py-0.5 rounded border border-slate-800">Year: {resultData.meshYear}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-300 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80 leading-relaxed min-h-[60px]">
+                          {resultData.meshScopeNote}
+                        </p>
+                      </div>
+
+                      {/* CINAHL Subject Heading Box */}
+                      <div className="flex flex-col gap-2">
+                        <span className="text-xs font-bold text-sky-300 uppercase tracking-wide">CINAHL Descriptor</span>
+                        <div className="text-xs text-slate-300 bg-slate-900/50 p-3 rounded-xl border border-slate-800/80 leading-relaxed min-h-[60px]">
+                          <span className="font-semibold text-white block mb-1">Aligned Term: {resultData.cinahlTerm}</span>
+                          {resultData.cinahlScopeNote || "CINAHL indexed aligned identically with MEDLINE taxonomy."}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* MAPPED SYNONYMS & HIERARCHY TREE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-6 border-t border-slate-800">
+                      
+                      {/* Synonyms */}
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-2">Subject Index Synonyms (Used For)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {resultData.meshSynonyms && resultData.meshSynonyms.length > 0 ? (
+                            resultData.meshSynonyms.map((syn, index) => (
+                              <span key={index} className="text-[10.5px] bg-slate-900 border border-slate-800 text-slate-300 px-2 py-1 rounded">
+                                {syn}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">No alternative index terms listed.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* MeSH Hierarchy Tree Context */}
+                      <div>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-wide block mb-2">Hierarchy Tree Placement</span>
+                        <div className="flex flex-col gap-1 text-[11px] bg-slate-900/40 p-3 rounded-xl border border-slate-800">
+                          {resultData.meshTreeStructure && resultData.meshTreeStructure.length > 0 ? (
+                            resultData.meshTreeStructure.map((node, index) => (
+                              <div key={index} className="flex items-center gap-1.5 text-slate-300">
+                                <span className="text-teal-500 font-bold">{" > ".repeat(index)}</span>
+                                <span>{node}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-slate-500 italic">Tree directory path unavailable.</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* DIRECT DATABASE TRANSLATIONS BLOCK */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Database className="w-4 h-4 text-emerald-400" /> Direct Database Translators
+                      </h3>
+                      <span className="text-[10px] text-slate-400 italic">Copy direct code lines below</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      
+                      {/* PubMed Translate Box */}
+                      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> PubMed Translation
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Standard MeSH</span>
+                            <span className="text-[11px] font-mono text-emerald-300 break-all select-all py-1.5">{resultData.searchSyntaxes.pubmed.standard}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.pubmed.standard, 'pm-std')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'pm-std' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'pm-std' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Major Topic Focus</span>
+                            <span className="text-[11px] font-mono text-emerald-300 break-all select-all py-1.5">{resultData.searchSyntaxes.pubmed.major}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.pubmed.major, 'pm-maj')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'pm-maj' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'pm-maj' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Systematic Block</span>
+                            <span className="text-[11px] font-mono text-emerald-300 break-all select-all py-1.5 leading-normal">{resultData.searchSyntaxes.pubmed.systematic}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.pubmed.systematic, 'pm-sys')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'pm-sys' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'pm-sys' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* MEDLINE Ovid Translate Box */}
+                      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span> MEDLINE (Ovid) Translation
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Explode Mesh (exp /)</span>
+                            <span className="text-[11px] font-mono text-blue-300 break-all select-all py-1.5">{resultData.searchSyntaxes.ovidMedline.explode}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.ovidMedline.explode, 'ovid-exp')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'ovid-exp' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'ovid-exp' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Non-Exploded Mesh (/)</span>
+                            <span className="text-[11px] font-mono text-blue-300 break-all select-all py-1.5">{resultData.searchSyntaxes.ovidMedline.exact}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.ovidMedline.exact, 'ovid-ex')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'ovid-ex' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'ovid-ex' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Systematic Block</span>
+                            <span className="text-[11px] font-mono text-blue-300 break-all select-all py-1.5 leading-normal">{resultData.searchSyntaxes.ovidMedline.systematic}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.ovidMedline.systematic, 'ovid-sys')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'ovid-sys' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'ovid-sys' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* CINAHL EBSCO Translate Box */}
+                      <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> CINAHL (EBSCO) Translation
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Explode Heading (MH "+")</span>
+                            <span className="text-[11px] font-mono text-indigo-300 break-all select-all py-1.5">{resultData.searchSyntaxes.cinahl.explode}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.cinahl.explode, 'cin-exp')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'cin-exp' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'cin-exp' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Exact Non-Explode</span>
+                            <span className="text-[11px] font-mono text-indigo-300 break-all select-all py-1.5">{resultData.searchSyntaxes.cinahl.exact}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.cinahl.exact, 'cin-ex')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'cin-ex' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'cin-ex' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-950 p-2 rounded border border-slate-800 flex flex-col justify-between">
+                            <span className="text-[10px] text-slate-500 font-semibold uppercase">Systematic Block</span>
+                            <span className="text-[11px] font-mono text-indigo-300 break-all select-all py-1.5 leading-normal">{resultData.searchSyntaxes.cinahl.systematic}</span>
+                            <button 
+                              onClick={() => copyToClipboard(resultData.searchSyntaxes.cinahl.systematic, 'cin-sys')} 
+                              className="text-[10px] mt-1 text-slate-400 hover:text-white flex items-center gap-1 self-end transition"
+                            >
+                              {copiedId === 'cin-sys' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                              {copiedId === 'cin-sys' ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
                 </div>
-              </label>
-
+              )}
             </div>
+          )}
 
-            <!-- Dynamic text synonyms -->
-            ${concept.isSystematic ? `
-              <div class="flex flex-col gap-2 pt-2 border-t border-slate-850">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-bold text-slate-400 uppercase tracking-wide">Included Keyword Synonyms</span>
-                  <button onclick="addKeywordToConcept('${concept.id}')" class="text-[10px] text-teal-400 hover:text-white flex items-center gap-1 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    Add Synonym Row
+          {/* TAB 2: SYSTEMATIC SEARCH BUILDER CANVAS */}
+          {activeTab === 'builder' && (
+            <div id="strategy-builder-canvas" className="flex flex-col gap-6">
+              
+              {/* INTERACTIVE BUILDER HEADER & TARGET SELECTION */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Layers className="w-5 h-5 text-teal-400" /> Systematic Strategy Canvas
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1">Combine, refine, and compile concepts into a complete systematic query</p>
+                </div>
+
+                <div className="flex bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                  {['pubmed', 'medline', 'cinahl'].map((dbKey) => (
+                    <button 
+                      key={dbKey}
+                      onClick={() => setDatabaseView(dbKey)}
+                      className={`text-xs px-4 py-1.5 rounded-lg font-semibold uppercase tracking-wider transition ${databaseView === dbKey ? 'bg-teal-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      {dbKey === 'pubmed' ? 'PubMed' : dbKey === 'medline' ? 'MEDLINE (Ovid)' : 'CINAHL'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* EMPTY WORKSPACE STATE */}
+              {concepts.length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-3xl p-12 text-center flex flex-col items-center justify-center gap-4 min-h-[350px]">
+                  <div className="w-14 h-14 bg-slate-900 rounded-xl flex items-center justify-center text-slate-600 border border-slate-800">
+                    <Layers className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Your Canvas is Empty</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 leading-relaxed">
+                      Before constructing a combined search query, search and pin indexing concepts using the **Crosswalk Term** tab first.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setActiveTab('crosswalk')}
+                    className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-teal-400 font-bold px-4 py-2 rounded-xl text-xs transition"
+                  >
+                    Go Back & Map a Keyword
                   </button>
                 </div>
-                <div class="flex flex-wrap gap-2">
-                  ${concept.suggestedKeywords.map((kw, kwIdx) => `
-                    <div class="flex items-center bg-slate-950 border border-slate-850 rounded-lg text-xs pl-2.5 overflow-hidden">
-                      <input 
-                        type="text" 
-                        value="${kw}" 
-                        onchange="updateKeywordValue('${concept.id}', ${kwIdx}, this.value)"
-                        class="bg-transparent text-slate-300 font-mono text-[11px] py-1 w-28 focus:outline-none focus:text-white"
-                      />
-                      <button onclick="removeKeywordFromConcept('${concept.id}', ${kwIdx})" class="p-1.5 text-slate-600 hover:text-rose-400 hover:bg-slate-900 border-l border-slate-850 transition">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  
+                  {/* MASTER COMPILED QUERY DISPLAY CARD */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-3 relative">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse"></span>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                          Compiled Master Query for {databaseView === 'pubmed' ? 'PubMed' : databaseView === 'medline' ? 'MEDLINE (Ovid)' : 'CINAHL (EBSCO)'}
+                        </h3>
+                      </div>
+                      
+                      <button 
+                        onClick={() => copyToClipboard(getMasterQuery(databaseView), 'master-compiled')}
+                        className="bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:text-white px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 text-slate-300 transition"
+                      >
+                        {copiedId === 'master-compiled' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            Copied Strategy
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            Copy Entire Query
+                          </>
+                        )}
                       </button>
                     </div>
-                  `).join('')}
+
+                    <pre className="bg-slate-900 p-4 rounded-xl border border-slate-800 font-mono text-[11.5px] leading-relaxed text-teal-300 overflow-x-auto whitespace-pre-wrap max-h-60 select-all">
+                      {getMasterQuery(databaseView)}
+                    </pre>
+
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-[10px] text-slate-500 italic">💡 Paste directly into your target search field</span>
+                      <button 
+                        onClick={() => setConcepts([])} 
+                        className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Clear All Concepts
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ACTIVE CONCEPTS LIST */}
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">Active Concept Modifiers ({concepts.length})</h3>
+                    
+                    {concepts.map((concept, index) => (
+                      <div key={concept.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-2xl overflow-hidden transition shadow">
+                        
+                        {/* Boolean Operator Connector Badge */}
+                        {index > 0 && (
+                          <div className="bg-slate-900 border-y border-slate-800 px-4 py-2 flex items-center gap-2">
+                            <span className="text-[10px] uppercase font-bold text-slate-500">Boolean Connector to Above concept:</span>
+                            <div className="flex bg-slate-950 border border-slate-800 p-0.5 rounded-md">
+                              {['AND', 'OR', 'NOT'].map(op => (
+                                <button 
+                                  key={op}
+                                  onClick={() => updateConceptSetting(concept.id, 'operator', op)}
+                                  className={`text-[10px] px-2.5 py-1 rounded font-bold transition ${concept.operator === op ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                  {op}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Concept Card Content */}
+                        <div className="p-5 flex flex-col gap-4">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="text-[10.5px] bg-slate-900 text-teal-400 px-2 py-0.5 rounded border border-slate-800 font-semibold uppercase">Concept {index + 1}</span>
+                              <h4 className="text-base font-bold text-white mt-1 flex items-center gap-2">
+                                {concept.meshTerm} <span className="text-xs text-slate-500 font-normal">({concept.conceptName})</span>
+                              </h4>
+                            </div>
+
+                            <button 
+                              onClick={() => removeConcept(concept.id)}
+                              className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-slate-900 transition"
+                              title="Remove concept from canvas"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Quick Setting Modifiers Toggles */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
+                            
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={concept.isExplode} 
+                                onChange={(e) => updateConceptSetting(concept.id, 'isExplode', e.target.checked)}
+                                disabled={concept.isMajor}
+                                className="accent-teal-500 rounded border-slate-800"
+                              />
+                              <div>
+                                <span className="font-semibold block text-white">Explode Term (+)</span>
+                                <span className="text-[10px] text-slate-500">Include narrower children tree nodes</span>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={concept.isMajor} 
+                                onChange={(e) => {
+                                  const val = e.target.checked;
+                                  updateConceptSetting(concept.id, 'isMajor', val);
+                                  if (val) {
+                                    updateConceptSetting(concept.id, 'isExplode', false);
+                                  }
+                                }}
+                                className="accent-teal-500 rounded border-slate-800"
+                              />
+                              <div>
+                                <span className="font-semibold block text-white">Major Topic Focus (*)</span>
+                                <span className="text-[10px] text-slate-500">Filter to articles focused on this term</span>
+                              </div>
+                            </label>
+
+                            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={concept.isSystematic} 
+                                onChange={(e) => updateConceptSetting(concept.id, 'isSystematic', e.target.checked)}
+                                className="accent-teal-500 rounded border-slate-800"
+                              />
+                              <div>
+                                <span className="font-semibold block text-white">Add Title/Abstract Keywords</span>
+                                <span className="text-[10px] text-slate-500">Create robust systematic keyword blocks</span>
+                              </div>
+                            </label>
+
+                          </div>
+
+                          {/* SYSTEMATIC KEYWORDS LIST EDITABLE ROW */}
+                          {concept.isSystematic && (
+                            <div className="flex flex-col gap-2 pt-2 border-t border-slate-800/80">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Included Entry & Wildcard Keywords</span>
+                                <button 
+                                  onClick={() => addCustomKeyword(concept.id)}
+                                  className="text-[10.5px] bg-slate-900 border border-slate-800 text-teal-400 hover:text-white px-2 py-1 rounded transition flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" /> Add Custom Keyword
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-2">
+                                {concept.suggestedKeywords.map((kw, kwIdx) => (
+                                  <div key={kwIdx} className="flex items-center bg-slate-900 border border-slate-800 rounded-lg overflow-hidden text-xs pl-2.5">
+                                    <input 
+                                      type="text" 
+                                      value={kw}
+                                      onChange={(e) => handleKeywordChange(concept.id, kwIdx, e.target.value)}
+                                      className="bg-transparent text-slate-300 font-mono text-[11px] focus:outline-none border-none py-1 w-28 focus:text-white transition"
+                                    />
+                                    <button 
+                                      onClick={() => removeKeyword(concept.id, kwIdx)}
+                                      className="hover:bg-slate-800 text-slate-500 hover:text-rose-400 p-1.5 transition border-l border-slate-800"
+                                      title="Remove keyword"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PREVIEW SINGLE COMPILED LINE FOR THIS SPECIFIC CONCEPT CARD */}
+                          <div className="bg-slate-900/40 p-2.5 rounded-xl border border-slate-800/80 flex items-center justify-between gap-4">
+                            <span className="text-[10px] text-slate-500 uppercase font-semibold">Single Concept Line Preview:</span>
+                            <span className="font-mono text-[10.5px] text-teal-400/90 truncate max-w-lg select-all">
+                              {getCompiledSingleQuery(concept, databaseView)}
+                            </span>
+                          </div>
+
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* SAVE TO VAULT DRAWER */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-3">
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Save Systematic Strategy Block</h3>
+                    <p className="text-xs text-slate-400">Save your structured workspace setup to retrieve across browser sessions or collaborate.</p>
+                    
+                    <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                      <input 
+                        type="text" 
+                        placeholder="e.g. Pediatric Asthma Care Strategy"
+                        value={strategyTitle}
+                        onChange={(e) => setStrategyTitle(e.target.value)}
+                        className="grow bg-slate-900 text-white placeholder-slate-500 border border-slate-800 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-teal-500"
+                      />
+                      <button 
+                        onClick={saveStrategyToCloud}
+                        disabled={isSaving}
+                        className="bg-teal-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs hover:bg-teal-400 active:scale-95 transition flex items-center justify-center gap-1.5 shadow"
+                      >
+                        {isSaving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Save to Collaborative Vault
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            ` : ''}
-
-            <!-- Single preview -->
-            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-850 flex items-center justify-between gap-4">
-              <span class="text-[9px] text-slate-500 uppercase font-extrabold">Block Output Line Preview:</span>
-              <span class="font-mono text-[10px] text-teal-400/90 truncate max-w-sm sm:max-w-md md:max-w-xl select-all">
-                ${generateSingleQueryLine(concept, databaseView)}
-              </span>
+              )}
             </div>
+          )}
 
+          {/* TAB 3: CLOUD STRATEGY LIST */}
+          {activeTab === 'cloud' && (
+            <div className="flex flex-col gap-6">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Share2 className="w-5 h-5 text-teal-400" /> Collaborative Cloud Vault
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">Access strategies configured and stored across researchers</p>
+              </div>
+
+              {!firebaseEnabled ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 text-center flex flex-col items-center gap-3">
+                  <X className="w-12 h-12 text-rose-500" />
+                  <h3 className="text-base font-bold text-white">Cloud Offline</h3>
+                  <p className="text-xs text-slate-400 max-w-sm">
+                    No active firebase config detected. Cloud strategies require Firebase config variables set up at runtime.
+                  </p>
+                </div>
+              ) : savedStrategies.length === 0 ? (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+                  <Bookmark className="w-10 h-10 text-slate-600 animate-pulse" />
+                  <h3 className="text-base font-bold text-white">No Cloud Strategies Found</h3>
+                  <p className="text-xs text-slate-400 max-w-xs">
+                    Be the first to save an elaborate systematic strategy to this channel vault!
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {savedStrategies.map((strategy) => (
+                    <div 
+                      key={strategy.id}
+                      onClick={() => loadStrategy(strategy)}
+                      className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-teal-500/50 p-5 rounded-2xl cursor-pointer transition flex flex-col justify-between gap-4 shadow"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[9px] uppercase font-bold text-teal-400 tracking-widest block">Stored Research Strategy</span>
+                        <h4 className="text-sm font-bold text-white line-clamp-1">{strategy.title}</h4>
+                        <p className="text-[10px] text-slate-500 mt-1">Concepts: {strategy.concepts?.map(c => c.meshTerm).join(', ') || 'None'}</p>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-slate-900 text-[10px] text-slate-500">
+                        <span>{new Date(strategy.createdAt).toLocaleDateString()}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-slate-400">
+                            {strategy.userDisplay || 'Collaborator'}
+                          </span>
+                          <button 
+                            onClick={(e) => deleteStrategy(strategy.id, e)}
+                            className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-slate-900 transition"
+                            title="Delete strategy"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: EDUCATIONAL GUIDE */}
+          {activeTab === 'help' && (
+            <div className="flex flex-col gap-6">
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-teal-400" /> Systematic Search Strategy Guide
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">Learn the principles of biomedical searching and database translation syntax</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* MeSH and Subject Headings Explainer */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow flex flex-col gap-3">
+                  <h3 className="text-sm font-bold text-teal-400 flex items-center gap-1.5">
+                    <Database className="w-4 h-4" /> Controlled Vocabularies
+                  </h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    **MeSH (Medical Subject Headings)** is the National Library of Medicine's (NLM) controlled vocabulary thesaurus used for indexing articles for MEDLINE and PubMed. 
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Instead of guessing all possible synonyms of a word (e.g. "renal calculus", "kidney stone", "nephrolithiasis"), searchers use the official MeSH term: **Kidney Calculi**. The database assigns this term to articles regardless of the author's chosen synonyms.
+                  </p>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    **CINAHL Subject Headings** are the authority terms of the Cumulative Index to Nursing and Allied Health Literature. It matches the structure of MeSH but is optimized for nursing practices.
+                  </p>
+                </div>
+
+                {/* Explode & Major Concept Details */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow flex flex-col gap-3">
+                  <h3 className="text-sm font-bold text-teal-400 flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4" /> Explode & Major Focus Concepts
+                  </h3>
+                  <div className="flex flex-col gap-3 text-xs text-slate-300">
+                    <div>
+                      <span className="font-bold text-white block">Exploding a Term:</span>
+                      Controlled vocabularies are arranged in tree hierarchies. Exploding automatically includes references indexed to your primary term, *plus* any narrower terms below it in the tree hierarchy.
+                    </div>
+                    <div>
+                      <span className="font-bold text-white block">Major Concept (Majr / Focus):</span>
+                      Articles are typically assigned several dozen subject headings, but only 3-5 represent the main focus. Selecting Major Focus filters results to only articles where your concept is the centerpiece.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Database Syntax Cheat Sheet */}
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 shadow md:col-span-2 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold text-teal-400 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4" /> Database Syntax Comparison Cheat Sheet
+                  </h3>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-slate-400 font-semibold">
+                          <th className="py-2 pr-4">Search Field Feature</th>
+                          <th className="py-2 px-4">PubMed (NCBI)</th>
+                          <th className="py-2 px-4">MEDLINE (Ovid)</th>
+                          <th className="py-2 pl-4">CINAHL (EBSCO)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800 text-slate-300 font-mono text-[11px]">
+                        <tr>
+                          <td className="py-2.5 pr-4 text-slate-200 font-sans">Standard Index Term</td>
+                          <td className="py-2.5 px-4 text-emerald-400">"Neoplasms"[Mesh]</td>
+                          <td className="py-2.5 px-4 text-blue-400">Neoplasms/</td>
+                          <td className="py-2.5 pl-4 text-indigo-400">MH "Neoplasms"</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 pr-4 text-slate-200 font-sans">Exploded Term</td>
+                          <td className="py-2.5 px-4 text-emerald-400">"Neoplasms"[Mesh] <span className="text-[9px] font-sans text-slate-500">(Auto-Explodes)</span></td>
+                          <td className="py-2.5 px-4 text-blue-400">exp Neoplasms/</td>
+                          <td className="py-2.5 pl-4 text-indigo-400">MH "Neoplasms+"</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 pr-4 text-slate-200 font-sans">Major Focus Term</td>
+                          <td className="py-2.5 px-4 text-emerald-400">"Neoplasms"[Majr]</td>
+                          <td className="py-2.5 px-4 text-blue-400">*Neoplasms/</td>
+                          <td className="py-2.5 pl-4 text-indigo-400">MM "Neoplasms"</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 pr-4 text-slate-200 font-sans">Title/Abstract Keyword Search</td>
+                          <td className="py-2.5 px-4 text-emerald-400">"breast cancer"[tiab]</td>
+                          <td className="py-2.5 px-4 text-blue-400">(breast cancer).ti,ab,kf.</td>
+                          <td className="py-2.5 pl-4 text-indigo-400">TI "breast cancer" OR AB "breast cancer"</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2.5 pr-4 text-slate-200 font-sans">Wildcard Operators</td>
+                          <td className="py-2.5 px-4 text-emerald-400">neoplasm*</td>
+                          <td className="py-2.5 px-4 text-blue-400">neoplasm$</td>
+                          <td className="py-2.5 pl-4 text-indigo-400">neoplasm*</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+        </div>
+      </main>
+
+      {/* FOOTER BAR */}
+      <footer className="bg-slate-950 border-t border-slate-800 text-slate-500 py-6 text-center text-xs shrink-0">
+        <p>© 2026 Medical Subject Heading Translation Tool. Powered by National Library of Medicine (NLM) Vocabularies.</p>
+        <p className="mt-1">Designed for clinical evidence synthesis researchers, systematic reviewers, and medical librarians.</p>
+      </footer>
+
+      {/* NOTIFICATION & ERROR MODAL */}
+      {modalMessage && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl flex flex-col gap-4">
+            <div className="flex items-start justify-between">
+              <h3 className="text-lg font-bold text-white">{modalMessage.title}</h3>
+              <button 
+                onClick={() => setModalMessage(null)}
+                className="text-slate-500 hover:text-white p-1 rounded hover:bg-slate-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">{modalMessage.message}</p>
+            <button 
+              onClick={() => setModalMessage(null)}
+              className="bg-teal-500 text-slate-950 font-bold py-2 px-4 rounded-xl text-xs hover:bg-teal-400 mt-2 transition"
+            >
+              Acknowledge
+            </button>
           </div>
-        `;
-        container.appendChild(itemDiv);
-      });
-    }
-
-    // --- CONSTRUCT COMPILER LINE REPRESENTATIONS ---
-    function generateSingleQueryLine(concept, dbType) {
-      const mesh = concept.meshTerm;
-      const cinahl = concept.cinahlTerm || concept.meshTerm;
-      const keywords = concept.suggestedKeywords || [];
-      const isSystematic = concept.isSystematic;
-      const isExplode = concept.isExplode;
-      const isMajor = concept.isMajor;
-
-      if (dbType === 'pubmed') {
-        const meshTag = isMajor ? '[Majr]' : '[Mesh]';
-        const meshQuery = `"${mesh}"${meshTag}`;
-        if (!isSystematic || keywords.length === 0) return meshQuery;
-        
-        const keywordTerms = keywords.map(kw => `"${kw}"[tiab]`).join(' OR ');
-        return `(${meshQuery} OR ${keywordTerms})`;
-      } 
-      
-      if (dbType === 'medline') {
-        let meshQuery = '';
-        if (isMajor) {
-          meshQuery = `*${mesh}/`;
-        } else {
-          meshQuery = isExplode ? `exp ${mesh}/` : `${mesh}/`;
-        }
-        if (!isSystematic || keywords.length === 0) return meshQuery;
-
-        const mappedKws = keywords.map(kw => {
-          const cleaned = kw.replace(/\*/g, '$');
-          return cleaned.includes(' ') ? `"${cleaned}"` : cleaned;
-        });
-        const keywordQuery = `(${mappedKws.join(' or ')}).ti,ab,kf.`;
-        return `(${meshQuery} or ${keywordQuery})`;
-      }
-
-      if (dbType === 'cinahl') {
-        let subjectHeadingQuery = '';
-        if (isMajor) {
-          subjectHeadingQuery = `MM "${cinahl}"`;
-        } else {
-          subjectHeadingQuery = isExplode ? `MH "${cinahl}+"` : `MH "${cinahl}"`;
-        }
-        if (!isSystematic || keywords.length === 0) return subjectHeadingQuery;
-
-        const mappedKws = keywords.map(kw => kw.includes(' ') ? `"${kw}"` : kw);
-        const keywordQuery = mappedKws.map(k => `TI ${k} OR AB ${k}`).join(' OR ');
-        return `(${subjectHeadingQuery} OR ${keywordQuery})`;
-      }
-
-      return '';
-    }
-
-    // --- COMPILE MASTER COMPREHENSIVE QUERY BLOCK ---
-    function compileMasterQueryText() {
-      const block = document.getElementById('compiled-query-block');
-      if (pinnedConcepts.length === 0) {
-        block.textContent = '/* Pin clinical concepts to translate search strategy logic blocks */';
-        return;
-      }
-
-      const totalQuery = pinnedConcepts.map((concept, index) => {
-        const singleLine = generateSingleQueryLine(concept, databaseView);
-        const connector = index > 0 ? `  ${concept.operator || 'AND'} ` : '';
-        return `${connector}${singleLine}`;
-      }).join('\n');
-
-      block.textContent = totalQuery;
-    }
-
-    // --- CHANGE VIEW DB IN BUILDER CANVAS ---
-    function changeDatabaseView(dbType) {
-      databaseView = dbType;
-      
-      // Update toggle buttons selection
-      ['pubmed', 'medline', 'cinahl'].forEach(type => {
-        const btn = document.getElementById(`btn-view-${type}`);
-        if (type === dbType) {
-          btn.className = "text-xs px-3.5 py-1.5 rounded-lg font-bold uppercase transition bg-teal-500 text-slate-950";
-        } else {
-          btn.className = "text-xs px-3.5 py-1.5 rounded-lg font-bold uppercase transition text-slate-400 hover:text-white";
-        }
-      });
-
-      // Update compilation title tag
-      const names = { pubmed: 'PubMed', medline: 'MEDLINE (Ovid)', cinahl: 'CINAHL' };
-      document.getElementById('compiled-db-title').textContent = names[dbType];
-
-      renderBuilderCanvas();
-    }
-
-    // --- CANVAS WORKSPACE DISPATCH MODIFIERS ---
-    function updateConceptSetting(conceptId, key, value) {
-      pinnedConcepts = pinnedConcepts.map(c => {
-        if (c.id === conceptId) {
-          return { ...c, [key]: value };
-        }
-        return c;
-      });
-      renderBuilderCanvas();
-    }
-
-    function handleMajorToggle(conceptId, checked) {
-      pinnedConcepts = pinnedConcepts.map(c => {
-        if (c.id === conceptId) {
-          const updated = { ...c, isMajor: checked };
-          if (checked) {
-            updated.isExplode = false; // Explode is mutually exclusive to direct focused major queries in some databases
-          }
-          return updated;
-        }
-        return c;
-      });
-      renderBuilderCanvas();
-    }
-
-    function updateKeywordValue(conceptId, idx, val) {
-      pinnedConcepts = pinnedConcepts.map(c => {
-        if (c.id === conceptId) {
-          const updatedKws = [...c.suggestedKeywords];
-          updatedKws[idx] = val;
-          return { ...c, suggestedKeywords: updatedKws };
-        }
-        return c;
-      });
-      renderBuilderCanvas();
-    }
-
-    function addKeywordToConcept(conceptId) {
-      pinnedConcepts = pinnedConcepts.map(c => {
-        if (c.id === conceptId) {
-          return { ...c, suggestedKeywords: [...c.suggestedKeywords, 'additional_term*'] };
-        }
-        return c;
-      });
-      renderBuilderCanvas();
-    }
-
-    function removeKeywordFromConcept(conceptId, idx) {
-      pinnedConcepts = pinnedConcepts.map(c => {
-        if (c.id === conceptId) {
-          const filtered = c.suggestedKeywords.filter((_, i) => i !== idx);
-          return { ...c, suggestedKeywords: filtered };
-        }
-        return c;
-      });
-      renderBuilderCanvas();
-    }
-
-    function removeConceptFromBuilder(conceptId) {
-      pinnedConcepts = pinnedConcepts.filter(c => c.id !== conceptId);
-      updateBadgeCount();
-      renderBuilderCanvas();
-    }
-
-    function clearBuilder() {
-      pinnedConcepts = [];
-      updateBadgeCount();
-      renderBuilderCanvas();
-    }
-
-    // --- COPIES SYSTEMATIC QUERY BLOCK ---
-    function copyMasterQuery() {
-      const codeBlock = document.getElementById('compiled-query-block');
-      copyToClipboardText(codeBlock.textContent);
-    }
-
-    // --- SAFE HELPER COPIES VIA TEXT SELECT ---
-    function copyToClipboardId(id) {
-      const text = document.getElementById(id).textContent;
-      copyToClipboardText(text);
-    }
-
-    function copyToClipboardText(text) {
-      try {
-        const tempElement = document.createElement('textarea');
-        tempElement.value = text;
-        tempElement.style.position = 'fixed';
-        tempElement.style.opacity = '0';
-        document.body.appendChild(tempElement);
-        tempElement.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempElement);
-        
-        showToast("Search term copied to clipboard successfully!");
-      } catch (err) {
-        console.error('Copy failed:', err);
-      }
-    }
-
-    // --- TOAST CONTROL ---
-    function showToast(msg) {
-      const toast = document.getElementById('toast-notification');
-      document.getElementById('toast-text').textContent = msg;
-      
-      toast.classList.remove('translate-y-20', 'opacity-0');
-      toast.classList.add('translate-y-0', 'opacity-100');
-
-      setTimeout(() => {
-        toast.classList.remove('translate-y-0', 'opacity-100');
-        toast.classList.add('translate-y-20', 'opacity-0');
-      }, 3000);
-    }
-
-    // --- UPDATE PIN BADGE COUNTER ---
-    function updateBadgeCount() {
-      const badge = document.getElementById('pinned-count-badge');
-      if (pinnedConcepts.length > 0) {
-        badge.textContent = pinnedConcepts.length;
-        badge.classList.remove('hidden');
-      } else {
-        badge.classList.add('hidden');
-      }
-    }
-
-    // --- TITLE CASE HELPER ---
-    function titleCase(str) {
-      return str.toLowerCase().replace(/\b\w/g, s => s.toUpperCase());
-    }
-
-    // --- INITIALIZE PAGE ---
-    window.onload = function() {
-      initializeShortcuts();
-      updateHistoryUI();
-    };
-  </script>
-</body>
-</html>
+        </div>
+      )}
+    </div>
+  );
+}
