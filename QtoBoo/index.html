@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Detective: The Boolean Quest</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0f172a;
+        }
+        .heading-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between">
+
+    <!-- Header Navigation -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20 text-white flex items-center justify-center">
+                    <!-- Custom Database SVG Icon -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="heading-font text-xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                        Database Detective
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium tracking-wider uppercase">The Boolean Quest</p>
+                </div>
+            </div>
+
+            <!-- Global Scoring & Mode Selectors -->
+            <div class="flex items-center gap-3">
+                <button id="btn-mission-mode" onclick="switchMode('mission')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-md transition duration-200">
+                    Missions
+                </button>
+                <button id="btn-sandbox-mode" onclick="switchMode('sandbox')" class="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition duration-200">
+                    Sandbox Engine
+                </button>
+                <div class="h-6 w-[1px] bg-slate-800"></div>
+                <div class="bg-slate-950 px-3.5 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2">
+                    <span class="text-amber-400 text-xs font-bold">★ Score:</span>
+                    <span id="score-display" class="font-bold text-sm text-slate-200">0</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Window -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Side Panel: Missions, Instructions, and Venn Diagram -->
+        <section class="lg:col-span-4 flex flex-col gap-6 w-full">
+            
+            <!-- Instructions/Mission Block -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl"></div>
+                <div class="relative">
+                    <div class="flex justify-between items-center mb-3">
+                        <span id="level-badge" class="px-2.5 py-1 text-[10px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30">
+                            Mission 1 of 5
+                        </span>
+                        <div class="flex gap-1" id="stars-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    
+                    <h2 id="mission-title" class="heading-font text-lg font-bold text-slate-100 mb-2">Loading Quest...</h2>
+                    
+                    <div class="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800/80 mb-4">
+                        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Research Question:</p>
+                        <p id="research-question" class="text-sm italic text-indigo-100 leading-relaxed font-medium">
+                            "How does screen time affect adolescent sleep patterns?"
+                        </p>
+                    </div>
+
+                    <div class="space-y-2 text-xs text-slate-300 leading-relaxed">
+                        <p id="mission-goal" class="font-semibold text-amber-300/90"></p>
+                        <p id="mission-hint" class="text-slate-400 border-l-2 border-slate-700 pl-2.5 italic"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Venn Diagram Widget -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center">
+                <h3 class="heading-font text-xs font-bold uppercase tracking-wider text-slate-400 self-start mb-3 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.003 9.003 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                    Live Logical Venn Visualizer
+                </h3>
+                
+                <div class="relative w-full h-44 flex items-center justify-center bg-slate-950/40 rounded-xl border border-slate-800/50 p-2 overflow-hidden">
+                    <!-- SVG Interactive Circles -->
+                    <svg id="venn-svg" viewBox="0 0 300 200" class="w-full h-full max-w-[280px]">
+                        <!-- Set A -->
+                        <circle id="circle-a" cx="110" cy="100" r="45" fill="rgba(99, 102, 241, 0.15)" stroke="#6366f1" stroke-width="2" />
+                        <!-- Set B -->
+                        <circle id="circle-b" cx="190" cy="100" r="45" fill="rgba(236, 72, 153, 0.15)" stroke="#ec4899" stroke-width="2" />
+                        <!-- Set C (hidden or shown based on query/mission complexity) -->
+                        <circle id="circle-c" cx="150" cy="140" r="45" fill="rgba(20, 184, 166, 0.15)" stroke="#14b8a6" stroke-width="2" class="transition-opacity duration-300" />
+                        
+                        <!-- Intersections overlays that light up dynamically based on boolean string state -->
+                        <path id="intersect-ab" d="" fill="none" class="transition-all duration-300" />
+                        <path id="intersect-all" d="" fill="none" class="transition-all duration-300" />
+
+                        <!-- Set Labels -->
+                        <text id="label-a" x="90" y="105" fill="#a5b4fc" font-size="9" font-weight="bold" text-anchor="middle">Concept A</text>
+                        <text id="label-b" x="210" y="105" fill="#fbcfe8" font-size="9" font-weight="bold" text-anchor="middle">Concept B</text>
+                        <text id="label-c" x="150" y="150" fill="#99f6e4" font-size="9" font-weight="bold" text-anchor="middle">Concept C</text>
+                    </svg>
+
+                    <!-- Real-time Venn Status Readout -->
+                    <div class="absolute bottom-2 left-2 bg-slate-900/90 px-2.5 py-1 rounded border border-slate-800 text-[10px] text-slate-400">
+                        Active logic: <span id="logic-readout" class="text-indigo-400 font-bold">A</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Side Panel: Workspace, Blocks, and Simulated Results -->
+        <section class="lg:col-span-8 flex flex-col gap-6 w-full">
+            
+            <!-- Sandbox Workspace Title -->
+            <div id="sandbox-header" class="hidden bg-indigo-950/40 border border-indigo-900/60 p-4 rounded-xl flex items-center justify-between">
+                <div>
+                    <h3 class="heading-font text-sm font-bold text-indigo-300">Sandbox Playground Engine</h3>
+                    <p class="text-xs text-slate-400">Construct any custom boolean queries or check dynamic database simulations instantly.</p>
+                </div>
+                <button onclick="resetSandbox()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition">
+                    Clear Workspace
+                </button>
+            </div>
+
+            <!-- Query Assembly Line -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="heading-font text-sm font-bold tracking-wide uppercase text-slate-400 flex items-center gap-1.5">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Boolean Query Workspace
+                    </h3>
+                    <div class="flex gap-2">
+                        <button onclick="clearLastToken()" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-lg transition flex items-center gap-1">
+                            <span>⌫</span> Undo
+                        </button>
+                        <button onclick="clearWorkspace()" class="px-3 py-1.5 text-xs font-semibold bg-rose-950/50 hover:bg-rose-900/50 border border-rose-900/60 text-rose-200 rounded-lg transition flex items-center gap-1">
+                            <span>🗑</span> Clear All
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Interactive Assembly Area -->
+                <div id="workspace" class="min-h-[100px] bg-slate-950/80 border-2 border-dashed border-slate-800 rounded-xl p-4 flex flex-wrap gap-2.5 items-center content-start transition-all duration-300">
+                    <!-- Dynamic Tokens will go here -->
+                    <div id="empty-workspace-prompt" class="text-slate-500 text-xs italic mx-auto self-center select-none py-4 text-center">
+                        Click on tokens from the banks below to build your query sequence...
+                    </div>
+                </div>
+
+                <!-- Custom Direct Keyboard Text Area (For Advanced Sandbox Mode / Interactive Synced View) -->
+                <div class="mt-4 flex flex-col gap-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <label for="direct-query-input" class="text-slate-400 font-semibold">Equivalent String Output:</label>
+                        <span class="text-[10px] text-slate-500 font-mono">Real-time string evaluation</span>
+                    </div>
+                    <div class="relative">
+                        <input type="text" id="direct-query-input" placeholder="Query auto-builds here..." class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-sm text-slate-300 font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" readonly />
+                        <button onclick="copyToClipboard()" class="absolute right-2 top-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-md border border-slate-700 transition">
+                            Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Banks Section -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+                
+                <!-- Section 1: Operators & Syntax -->
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                        <span class="h-[2px] w-4 bg-purple-500"></span> 1. Boolean Operators & Syntax Elements
+                    </h4>
+                    <div id="operator-bank" class="flex flex-wrap gap-2">
+                        <!-- Dynamic Operator Tokens -->
+                    </div>
+                </div>
+
+                <!-- Section 2: Core Keywords -->
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                        <span class="h-[2px] w-4 bg-indigo-500"></span> 2. Primary Keyword Concepts
+                    </h4>
+                    <div id="keyword-bank" class="flex flex-wrap gap-2">
+                        <!-- Dynamic Concept Tokens -->
+                    </div>
+                </div>
+
+                <!-- Section 3: Synonyms & Variants -->
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                        <span class="h-[2px] w-4 bg-pink-500"></span> 3. Synonyms & Related Expansion Terms
+                    </h4>
+                    <div id="synonym-bank" class="flex flex-wrap gap-2">
+                        <!-- Dynamic Synonym Tokens -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Check Bar / Action Area -->
+            <div class="flex flex-col sm:flex-row gap-4 items-center justify-between bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+                <div class="flex items-center gap-3 w-full sm:w-auto">
+                    <span id="validation-icon" class="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 text-slate-400 text-sm font-bold">?</span>
+                    <div>
+                        <p id="validation-summary" class="text-xs font-semibold text-slate-300">Construct your search query block above.</p>
+                        <p id="validation-detail" class="text-[11px] text-slate-500">Make sure all parentheses and quotation marks match perfectly.</p>
+                    </div>
+                </div>
+                <button id="btn-action-test" onclick="evaluateQuery()" class="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-sm font-bold text-white rounded-xl shadow-lg shadow-indigo-500/20 active:translate-y-0.5 transition duration-150">
+                    Run Query Test 🚀
+                </button>
+            </div>
+
+            <!-- Real-time Database Simulation Interface -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b border-slate-800">
+                    <div>
+                        <h3 class="heading-font text-sm font-bold tracking-wide uppercase text-slate-300 flex items-center gap-2">
+                            <span class="flex h-2 w-2 relative">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                            </span>
+                            Simulated Database Hits
+                        </h3>
+                        <p class="text-[11px] text-slate-500">Dynamic mockup output based on your assembled query expression.</p>
+                    </div>
+                    <div class="bg-slate-950 px-3.5 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2 text-xs">
+                        <span class="text-slate-400">Documents Found:</span>
+                        <span id="hit-counter" class="font-bold text-sky-400 font-mono">0</span>
+                    </div>
+                </div>
+
+                <!-- Simulation Feed Window -->
+                <div id="database-feed" class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                    <!-- Populated dynamically with cards -->
+                    <div class="text-slate-500 text-xs italic text-center py-8">
+                        The simulated search index is empty. Complete a successful query or select terms to scan articles.
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- Interactive Certificate / Finish Modal -->
+    <div id="completion-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-8 shadow-2xl relative text-center">
+            <!-- Sparkles BG effect -->
+            <div class="absolute inset-0 bg-gradient-to-b from-indigo-500/10 to-transparent rounded-2xl pointer-events-none"></div>
+            
+            <div class="w-16 h-16 bg-amber-500/10 border-2 border-amber-500 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                🏆
+            </div>
+            
+            <h2 class="heading-font text-2xl font-bold text-slate-100 mb-2">Quest Completed!</h2>
+            <p class="text-sm text-slate-400 mb-6">You've successfully solved every logic puzzle and became a master Boolean Search Engineer!</p>
+            
+            <!-- Beautiful Certificate-like card -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-5 mb-6 text-left relative overflow-hidden">
+                <div class="border border-indigo-500/20 rounded-lg p-4 bg-indigo-950/10">
+                    <p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Detective Certification</p>
+                    <h3 class="heading-font text-lg font-bold text-indigo-300 mb-2">Master Boolean Investigator</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                        Recognized for exceptional precision in logical syntax formulation, synonym construction, and structured metadata mapping.
+                    </p>
+                    <div class="flex justify-between items-center text-[10px] text-slate-500 font-semibold pt-3 border-t border-slate-900">
+                        <span>Database Detective Academic Group</span>
+                        <span>SCORE: <span id="final-score" class="text-amber-400 font-bold text-xs">100</span> PTS</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 justify-center">
+                <button onclick="restartGame()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 rounded-lg transition">
+                    Play Again
+                </button>
+                <button onclick="switchMode('sandbox'); closeModal();" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white rounded-lg shadow-md transition">
+                    Go to Sandbox Engine
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notice Widget -->
+    <div id="toast" class="fixed bottom-6 right-6 bg-slate-950 border border-slate-800 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 translate-y-24 opacity-0 transition-all duration-300 z-50">
+        <span id="toast-icon">✨</span>
+        <span id="toast-msg" class="text-xs font-semibold">Prompt message here</span>
+    </div>
+
+    <!-- Footer Information -->
+    <footer class="border-t border-slate-800/80 bg-slate-950/40 text-center py-4 px-4">
+        <p class="text-xs text-slate-500">
+            Designed for information literacy and academic research training. Play & Master Boolean operators like <span class="font-bold text-slate-400">AND</span>, <span class="font-bold text-slate-400">OR</span>, <span class="font-bold text-slate-400">NOT</span>, and precise syntaxes.
+        </p>
+    </footer>
+
+    <!-- Logic Scripting -->
+    <script>
+        // Game state variables
+        let currentMode = 'mission'; // 'mission' or 'sandbox'
+        let currentMissionIndex = 0;
+        let score = 0;
+        let activeQueryTokens = [];
+        let completedMissions = [];
+
+        // Global constant for app id & Firebase (optional hook placeholder)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'boolean-search-detective';
+
+        // Custom operators list
+        const operatorBank = [
+            { id: 'op_and', label: 'AND', type: 'operator', css: 'bg-indigo-600 hover:bg-indigo-500 text-white' },
+            { id: 'op_or', label: 'OR', type: 'operator', css: 'bg-pink-600 hover:bg-pink-500 text-white' },
+            { id: 'op_not', label: 'NOT', type: 'operator', css: 'bg-emerald-700 hover:bg-emerald-600 text-white' },
+            { id: 'op_lparen', label: '(', type: 'syntax', css: 'bg-slate-700 hover:bg-slate-600 text-slate-100' },
+            { id: 'op_rparen', label: ')', type: 'syntax', css: 'bg-slate-700 hover:bg-slate-600 text-slate-100' },
+            { id: 'op_quote', label: '"', type: 'syntax', css: 'bg-slate-700 hover:bg-slate-600 text-indigo-300 font-bold' }
+        ];
+
+        // Missions List with dedicated rules and mock articles
+        const missions = [
+            {
+                id: 1,
+                title: "Quest 1: The Distracted Teenager",
+                researchQuestion: "Does screen time affect adolescent sleep patterns?",
+                goal: "Goal: Construct a simple boolean string targeting 'screen time' combined with 'adolescents'.",
+                hint: "Hint: Group the phrase \"screen time\" in quotation marks to prevent databases searching the words separately, then use AND with adolescents.",
+                keywords: [
+                    { id: 'k_screentime', label: 'screen time', type: 'keyword' },
+                    { id: 'k_adolescents', label: 'adolescents', type: 'keyword' },
+                    { id: 'k_cats', label: 'cats', type: 'distractor' }
+                ],
+                synonyms: [
+                    { id: 's_screens', label: 'screens', type: 'synonym' },
+                    { id: 's_sleep', label: 'sleep', type: 'synonym' }
+                ],
+                // Evaluates if search tokens fulfill criteria
+                validate: (tokens) => {
+                    const str = tokens.map(t => t.label).join(' ').toUpperCase();
+                    // Needs: "screen time" AND adolescents (or teenagers)
+                    const hasScreenPhrase = str.includes('" SCREEN TIME "');
+                    const hasAnd = str.includes(' AND ');
+                    const hasAdolescents = str.includes('ADOLESCENTS');
+                    
+                    if (!hasScreenPhrase) return { valid: false, msg: "Syntax Warning", detail: "Make sure 'screen time' is enclosed in quotation marks: \"screen time\"" };
+                    if (!hasAnd) return { valid: false, msg: "Missing Operator", detail: "You must connect your distinct concepts with AND to intercept them." };
+                    if (!hasAdolescents) return { valid: false, msg: "Missing Subject", detail: "Make sure you include the term 'adolescents' in your query." };
+                    
+                    return { valid: true, msg: "Search Success!", detail: "Perfect! You connected a phrase and a key demographic." };
+                },
+                results: [
+                    { title: "Understanding Screen Time in Modern Teenagers", snippet: "How modern adolescents manage their screen time habits.", matches: ['screen time', 'adolescents'] },
+                    { title: "Adolescent Sleep Loss and Digital Media Devices", snippet: "Teenagers are losing crucial recovery sleep due to screen time overload.", matches: ['screen time', 'adolescents'] },
+                    { title: "Why Cats Love Windows", snippet: "A look into feline behaviors when looking at screen doors.", matches: ['cats'] }
+                ]
+            },
+            {
+                id: 2,
+                title: "Quest 2: Renewable Energy Windfall",
+                researchQuestion: "What is the environmental impact of wind turbines on birds?",
+                goal: "Goal: Map the exact phrase \"wind turbines\" AND the broad term \"birds\", excluding \"sea birds\" using NOT.",
+                hint: "Hint: Connect \"wind turbines\" AND birds, and exclude marine species with: NOT \"sea birds\".",
+                keywords: [
+                    { id: 'k_windturbines', label: 'wind turbines', type: 'keyword' },
+                    { id: 'k_birds', label: 'birds', type: 'keyword' }
+                ],
+                synonyms: [
+                    { id: 's_seabirds', label: 'sea birds', type: 'synonym' },
+                    { id: 's_solarenergy', label: 'solar energy', type: 'distractor' }
+                ],
+                validate: (tokens) => {
+                    const str = tokens.map(t => t.label).join(' ').toUpperCase();
+                    const hasWindPhrase = str.includes('" WIND TURBINES "');
+                    const hasAnd = str.includes(' AND ');
+                    const hasBirds = str.includes('BIRDS');
+                    const hasNot = str.includes(' NOT ');
+                    const hasSeaPhrase = str.includes('" SEA BIRDS "');
+
+                    if (!hasWindPhrase) return { valid: false, msg: "Incorrect Phrase", detail: "Ensure \"wind turbines\" is in double quotes." };
+                    if (!hasAnd) return { valid: false, msg: "Connector Required", detail: "Remember to use AND between wind turbines and birds." };
+                    if (!hasBirds) return { valid: false, msg: "Missing Target", detail: "Include 'birds' to focus your research query." };
+                    if (!hasNot || !hasSeaPhrase) return { valid: false, msg: "Exclusion Missing", detail: "Exclude ocean fowls by adding: NOT \"sea birds\" at the end." };
+
+                    return { valid: true, msg: "Search Success!", detail: "Spectacular. You bypassed local marine noise and isolated land birds." };
+                },
+                results: [
+                    { title: "Avian Casualties Near Modern Wind Farms", snippet: "Evaluating how local land birds collide with spinning blades on land turbines.", matches: ['wind turbines', 'birds'] },
+                    { title: "Environmental Impacts of Wind Turbines", snippet: "Assessing acoustic signatures and land bird flight path intersections.", matches: ['wind turbines', 'birds'] },
+                    { title: "The Life Cycle of Sea Birds", snippet: "Oceanic behaviors of gulls and majestic albatrosses.", matches: ['sea birds'] }
+                ]
+            },
+            {
+                id: 3,
+                title: "Quest 3: The Adolescent Stressor",
+                researchQuestion: "How do social media platforms trigger anxiety or stress in students?",
+                goal: "Goal: Group synonyms for mental pressure using parentheses & OR: (anxiety OR stress) AND \"social media\".",
+                hint: "Hint: Use brackets/parentheses around synonyms! Syntax: \"social media\" AND (anxiety OR stress).",
+                keywords: [
+                    { id: 'k_socialmedia', label: 'social media', type: 'keyword' },
+                    { id: 'k_students', label: 'students', type: 'distractor' }
+                ],
+                synonyms: [
+                    { id: 's_anxiety', label: 'anxiety', type: 'synonym' },
+                    { id: 's_stress', label: 'stress', type: 'synonym' }
+                ],
+                validate: (tokens) => {
+                    const str = tokens.map(t => t.label).join(' ').toUpperCase();
+                    
+                    // Simple logic validation checks
+                    const hasSocialMedia = str.includes('" SOCIAL MEDIA "');
+                    const hasAnd = str.includes(' AND ');
+                    const hasAnxiety = str.includes('ANXIETY');
+                    const hasStress = str.includes('STRESS');
+                    const hasOr = str.includes(' OR ');
+                    
+                    // Check balanced parenthesis
+                    const lparenCount = (str.match(/\(/g) || []).length;
+                    const rparenCount = (str.match(/\)/g) || []).length;
+
+                    if (!hasSocialMedia) return { valid: false, msg: "Media Target", detail: "Make sure \"social media\" is phrased in quotes." };
+                    if (!hasAnd) return { valid: false, msg: "Logic Connection", detail: "You must connect the media source to mental states with AND." };
+                    if (!hasAnxiety || !hasStress || !hasOr) return { valid: false, msg: "Synonym Grouping", detail: "Group 'anxiety' and 'stress' with OR: (anxiety OR stress)." };
+                    if (lparenCount === 0 || rparenCount === 0 || lparenCount !== rparenCount) {
+                        return { valid: false, msg: "Parentheses Mismatch", detail: "Wrap your OR statement safely in brackets. E.g., (anxiety OR stress)" };
+                    }
+
+                    // Check if OR is inside parentheses
+                    const parenContentIndex = str.indexOf('(');
+                    const parenCloseIndex = str.indexOf(')');
+                    if (parenContentIndex > -1 && parenCloseIndex > parenContentIndex) {
+                        const inside = str.substring(parenContentIndex + 1, parenCloseIndex);
+                        if (!inside.includes('OR')) {
+                            return { valid: false, msg: "Nesting error", detail: "Place the OR operator inside the parentheses to group options." };
+                        }
+                    }
+
+                    return { valid: true, msg: "Search Success!", detail: "Incredible grouping! You maximized database accuracy by capturing multiple stress terms." };
+                },
+                results: [
+                    { title: "Social Media Usage and Student Anxiety", snippet: "Why checking feeds late at night amplifies generalized student anxiety.", matches: ['social media', 'anxiety'] },
+                    { title: "Coping with Academic Stress in the Digital Era", snippet: "Analyzing the overlap between social media distraction and school stress.", matches: ['social media', 'stress'] }
+                ]
+            },
+            {
+                id: 4,
+                title: "Quest 4: Global Climate Crisis",
+                researchQuestion: "What solutions reduce global warming or climate change without taxing heavy industries?",
+                goal: "Goal: Create a query targeting either \"global warming\" OR \"climate change\", AND solutions, NOT taxes.",
+                hint: "Hint: ( \"global warming\" OR \"climate change\" ) AND solutions NOT taxes.",
+                keywords: [
+                    { id: 'k_warming', label: 'global warming', type: 'keyword' },
+                    { id: 'k_climate', label: 'climate change', type: 'keyword' }
+                ],
+                synonyms: [
+                    { id: 's_solutions', label: 'solutions', type: 'synonym' },
+                    { id: 's_taxes', label: 'taxes', type: 'synonym' }
+                ],
+                validate: (tokens) => {
+                    const str = tokens.map(t => t.label).join(' ').toUpperCase();
+                    const hasWarming = str.includes('" GLOBAL WARMING "');
+                    const hasClimate = str.includes('" CLIMATE CHANGE "');
+                    const hasOr = str.includes(' OR ');
+                    const hasAnd = str.includes(' AND ');
+                    const hasSolutions = str.includes('SOLUTIONS');
+                    const hasNot = str.includes(' NOT ');
+                    const hasTaxes = str.includes('TAXES');
+                    
+                    const lparenCount = (str.match(/\(/g) || []).length;
+                    const rparenCount = (str.match(/\)/g) || []).length;
+
+                    if (!hasWarming || !hasClimate || !hasOr) return { valid: false, msg: "Theme Grouping", detail: "Use ( \"global warming\" OR \"climate change\" ) to grab either key term." };
+                    if (lparenCount === 0 || rparenCount !== lparenCount) return { valid: false, msg: "Syntax Check", detail: "Protect your primary OR concepts with parentheses." };
+                    if (!hasAnd || !hasSolutions) return { valid: false, msg: "Action Step", detail: "Intersect your core environmental concepts with solutions." };
+                    if (!hasNot || !hasTaxes) return { valid: false, msg: "Exclusion Field", detail: "Subtract tax discussions with: NOT taxes." };
+
+                    return { valid: true, msg: "Search Success!", detail: "Masterful filtering! You avoided tax topics while sourcing green mitigation alternatives." };
+                },
+                results: [
+                    { title: "Innovative Engineering Solutions for Climate Change", snippet: "How modern carbon capturing technologies offer scalable solutions to arrest climate change.", matches: ['climate change', 'solutions'] },
+                    { title: "Global Warming: Reforestation Solutions Tested", snippet: "Planting forests acts as simple biological solutions to store global greenhouse gas.", matches: ['global warming', 'solutions'] }
+                ]
+            },
+            {
+                id: 5,
+                title: "Quest 5: The Ultimate Academic Challenge",
+                researchQuestion: "How is artificial intelligence used in oncology diagnosing skin cancer, excluding other cancers?",
+                goal: "Goal: Synthesize everything. ( \"artificial intelligence\" OR AI ) AND \"skin cancer\" NOT \"lung cancer\".",
+                hint: "Hint: Group AI terms, intersect with \"skin cancer\" and eliminate \"lung cancer\". Let's show off your detective mastery!",
+                keywords: [
+                    { id: 'k_ai', label: 'artificial intelligence', type: 'keyword' },
+                    { id: 'k_skincancer', label: 'skin cancer', type: 'keyword' }
+                ],
+                synonyms: [
+                    { id: 's_ai_short', label: 'AI', type: 'synonym' },
+                    { id: 's_lung', label: 'lung cancer', type: 'synonym' }
+                ],
+                validate: (tokens) => {
+                    const str = tokens.map(t => t.label).join(' ').toUpperCase();
+                    const hasAI_Full = str.includes('" ARTIFICIAL INTELLIGENCE "');
+                    const hasAI_Short = str.includes(' AI ');
+                    const hasSkin = str.includes('" SKIN CANCER "');
+                    const hasLung = str.includes('" LUNG CANCER "');
+                    const hasOr = str.includes(' OR ');
+                    const hasAnd = str.includes(' AND ');
+                    const hasNot = str.includes(' NOT ');
+                    
+                    const lparenCount = (str.match(/\(/g) || []).length;
+                    const rparenCount = (str.match(/\)/g) || []).length;
+
+                    if ((!hasAI_Full && !hasAI_Short) || !hasOr) return { valid: false, msg: "Acronym Pairing", detail: "Group both variations with OR: ( \"artificial intelligence\" OR AI )" };
+                    if (lparenCount === 0 || rparenCount !== lparenCount) return { valid: false, msg: "Logic Grouping", detail: "Isolate terms using brackets: ( \"artificial intelligence\" OR AI )." };
+                    if (!hasAnd || !hasSkin) return { valid: false, msg: "Intersection Required", detail: "You must connect to \"skin cancer\" using AND." };
+                    if (!hasNot || !hasLung) return { valid: false, msg: "Clean Extraction", detail: "Remember to filter out chest oncology with NOT \"lung cancer\"." };
+
+                    return { valid: true, msg: "Master Certification Earned!", detail: "Perfection. You formulated a flawless triple-layer structured boolean search string!" };
+                },
+                results: [
+                    { title: "Diagnosing Skin Cancer with Artificial Intelligence", snippet: "Deep convolutional neural networks achieve dermatologist-level accuracy.", matches: ['artificial intelligence', 'skin cancer'] },
+                    { title: "Using AI to Spot Melanomas Early", snippet: "Mobile devices powered by advanced AI screen localized skin cancers.", matches: ['AI', 'skin cancer'] }
+                ]
+            }
+        ];
+
+        // Start Game on load
+        window.onload = function() {
+            initGame();
+        }
+
+        // Initialize App UI Elements
+        function initGame() {
+            score = 0;
+            currentMissionIndex = 0;
+            completedMissions = [];
+            document.getElementById('score-display').innerText = score;
+            loadMission(currentMissionIndex);
+        }
+
+        // Load Mission and Populate Token Banks
+        function loadMission(index) {
+            if (index >= missions.length) {
+                showCertificate();
+                return;
+            }
+
+            const mission = missions[index];
+            activeQueryTokens = [];
+            updateWorkspaceDisplay();
+
+            // Setup Details
+            document.getElementById('level-badge').innerText = `Mission ${mission.id} of ${missions.length}`;
+            document.getElementById('mission-title').innerText = mission.title;
+            document.getElementById('research-question').innerText = `"${mission.researchQuestion}"`;
+            document.getElementById('mission-goal').innerText = mission.goal;
+            document.getElementById('mission-hint').innerText = mission.hint;
+
+            // Generate Star Progression
+            const starsContainer = document.getElementById('stars-container');
+            starsContainer.innerHTML = '';
+            for (let i = 0; i < missions.length; i++) {
+                const star = document.createElement('span');
+                star.innerText = i < index ? '★' : '☆';
+                star.className = i < index ? 'text-amber-400 text-sm' : 'text-slate-600 text-sm';
+                starsContainer.appendChild(star);
+            }
+
+            // Reset Database Simulator Display
+            simulateDatabaseOutput();
+
+            // Load Bank Elements
+            populateBank('operator-bank', operatorBank);
+            populateBank('keyword-bank', mission.keywords);
+            populateBank('synonym-bank', mission.synonyms);
+
+            // Update Venn diagram placeholders
+            updateVennDiagramLabels(mission);
+            resetVennLogic();
+
+            // Default Status bar
+            updateValidationStatus('?', 'Construct your search query block above.', 'text-slate-400', 'bg-slate-800', 'Make sure all parentheses and quotation marks match perfectly.');
+        }
+
+        // Create HTML tokens for the banks
+        function populateBank(elementId, tokenList) {
+            const container = document.getElementById(elementId);
+            container.innerHTML = '';
+
+            tokenList.forEach(token => {
+                const button = document.createElement('button');
+                
+                // Color formatting depending on token type
+                let colorClass = 'bg-slate-800 hover:bg-indigo-950 hover:border-indigo-800 border border-slate-700 text-slate-200';
+                if (token.css) {
+                    colorClass = token.css;
+                } else if (token.type === 'keyword') {
+                    colorClass = 'bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-900/50 hover:border-indigo-400';
+                } else if (token.type === 'synonym') {
+                    colorClass = 'bg-pink-950/40 border border-pink-500/30 text-pink-300 hover:bg-pink-900/50 hover:border-pink-400';
+                } else if (token.type === 'distractor') {
+                    colorClass = 'bg-slate-800/40 border border-slate-700 text-slate-400 hover:bg-slate-700/50 hover:text-slate-300';
+                }
+
+                button.className = `px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer select-none transition active:scale-95 duration-100 ${colorClass}`;
+                button.innerText = token.label;
+                button.onclick = () => addToken(token);
+                container.appendChild(button);
+            });
+        }
+
+        // Add element into query line
+        function addToken(token) {
+            // Push token copy to avoid reference duplication
+            activeQueryTokens.push({ ...token, id: `${token.id}_${Date.now()}` });
+            updateWorkspaceDisplay();
+            evaluateOnTheFly();
+            showToast("Added token: " + token.label);
+        }
+
+        // Delete last token added
+        function clearLastToken() {
+            if (activeQueryTokens.length > 0) {
+                const popped = activeQueryTokens.pop();
+                updateWorkspaceDisplay();
+                evaluateOnTheFly();
+                showToast("Removed: " + popped.label);
+            }
+        }
+
+        // Clear whole assembly workspace
+        function clearWorkspace() {
+            activeQueryTokens = [];
+            updateWorkspaceDisplay();
+            resetVennLogic();
+            document.getElementById('database-feed').innerHTML = `<div class="text-slate-500 text-xs italic text-center py-8">The simulated search index is empty. Complete a successful query or select terms to scan articles.</div>`;
+            document.getElementById('hit-counter').innerText = '0';
+            showToast("Workspace Cleared 🧹");
+        }
+
+        // Syncs active sequence with UI elements
+        function updateWorkspaceDisplay() {
+            const workspace = document.getElementById('workspace');
+            const prompt = document.getElementById('empty-workspace-prompt');
+            const directInput = document.getElementById('direct-query-input');
+
+            // Select all current dynamically rendered buttons (except the baseline prompt)
+            const oldButtons = workspace.querySelectorAll('.token-element');
+            oldButtons.forEach(btn => btn.remove());
+
+            if (activeQueryTokens.length === 0) {
+                prompt.classList.remove('hidden');
+                directInput.value = '';
+                return;
+            }
+
+            prompt.classList.add('hidden');
+
+            // Render every element in sequence
+            activeQueryTokens.forEach((token, index) => {
+                const button = document.createElement('button');
+                
+                let tokenColor = 'bg-indigo-600 text-white';
+                if (token.type === 'operator') {
+                    tokenColor = 'bg-indigo-600 text-white border border-indigo-400/30';
+                } else if (token.type === 'syntax') {
+                    tokenColor = 'bg-slate-700 text-slate-100 border border-slate-600';
+                } else if (token.type === 'keyword') {
+                    tokenColor = 'bg-slate-900 border border-indigo-500/50 text-indigo-300';
+                } else if (token.type === 'synonym') {
+                    tokenColor = 'bg-slate-900 border border-pink-500/50 text-pink-300';
+                } else {
+                    tokenColor = 'bg-slate-900 border border-slate-700 text-slate-400';
+                }
+
+                button.className = `token-element group px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition duration-150 ${tokenColor}`;
+                
+                // Content span
+                const spanText = document.createElement('span');
+                spanText.innerText = token.label;
+                button.appendChild(spanText);
+
+                // Quick deletion button
+                const deleteIndicator = document.createElement('span');
+                deleteIndicator.innerText = '×';
+                deleteIndicator.className = 'text-[10px] text-slate-400 group-hover:text-rose-400 transition ml-0.5';
+                button.appendChild(deleteIndicator);
+
+                button.onclick = () => removeSpecificToken(index);
+
+                workspace.appendChild(button);
+            });
+
+            // Update the flattened string presentation
+            directInput.value = getConstructedString();
+        }
+
+        // Convert token arrays to string standard
+        function getConstructedString() {
+            let output = "";
+            let insideQuotes = false;
+
+            activeQueryTokens.forEach((token, index) => {
+                const label = token.label;
+                
+                if (label === '"') {
+                    if (!insideQuotes) {
+                        output += ' " ';
+                        insideQuotes = true;
+                    } else {
+                        output += ' " ';
+                        insideQuotes = false;
+                    }
+                } else {
+                    // Prevent double spacing
+                    output += ` ${label} `;
+                }
+            });
+
+            // Clean up spacing variations
+            return output.replace(/\s+/g, ' ').trim();
+        }
+
+        // Delete token at exact array index
+        function removeSpecificToken(index) {
+            activeQueryTokens.splice(index, 1);
+            updateWorkspaceDisplay();
+            evaluateOnTheFly();
+        }
+
+        // Sync visual labels with current level target variables
+        function updateVennDiagramLabels(mission) {
+            const conceptA = mission.keywords[0]?.label || "Concept A";
+            const conceptB = mission.keywords[1]?.label || "Concept B";
+            const conceptC = mission.synonyms[0]?.label || "Concept C";
+
+            document.getElementById('label-a').textContent = conceptA.length > 12 ? conceptA.substring(0, 10) + '..' : conceptA;
+            document.getElementById('label-b').textContent = conceptB.length > 12 ? conceptB.substring(0, 10) + '..' : conceptB;
+            document.getElementById('label-c').textContent = conceptC.length > 12 ? conceptC.substring(0, 10) + '..' : conceptC;
+        }
+
+        // Instantly recalculates highlights based on current work
+        function evaluateOnTheFly() {
+            const str = getConstructedString().toUpperCase();
+            
+            // Light up circles in SVG corresponding to token presence
+            const circleA = document.getElementById('circle-a');
+            const circleB = document.getElementById('circle-b');
+            const circleC = document.getElementById('circle-c');
+            const readout = document.getElementById('logic-readout');
+
+            // Reset default colors
+            circleA.style.fill = "rgba(99, 102, 241, 0.15)";
+            circleB.style.fill = "rgba(236, 72, 153, 0.15)";
+            circleC.style.fill = "rgba(20, 184, 166, 0.15)";
+            
+            let elementsActive = [];
+            
+            // Check term triggers
+            const hasKeywordA = activeQueryTokens.some(t => t.type === 'keyword');
+            const hasKeywordB = activeQueryTokens.some(t => t.type === 'keyword' && t.id !== activeQueryTokens[0]?.id);
+            const hasSynonym = activeQueryTokens.some(t => t.type === 'synonym');
+
+            if (hasKeywordA) {
+                circleA.style.fill = "rgba(99, 102, 241, 0.4)";
+                elementsActive.push("A");
+            }
+            if (hasKeywordB) {
+                circleB.style.fill = "rgba(236, 72, 153, 0.4)";
+                elementsActive.push("B");
+            }
+            if (hasSynonym) {
+                circleC.style.fill = "rgba(20, 184, 166, 0.4)";
+                elementsActive.push("C");
+            }
+
+            // Evaluate Logical Conjunction displays
+            const hasAND = str.includes("AND");
+            const hasOR = str.includes("OR");
+            const hasNOT = str.includes("NOT");
+
+            let connectorText = "A";
+            if (elementsActive.length > 1) {
+                if (hasAND) connectorText = elementsActive.join(" ∩ ");
+                else if (hasOR) connectorText = elementsActive.join(" ∪ ");
+                else if (hasNOT) connectorText = `${elementsActive[0]} \\ ${elementsActive[1]}`;
+                else connectorText = elementsActive.join(", ");
+            } else if (elementsActive.length === 1) {
+                connectorText = elementsActive[0];
+            } else {
+                connectorText = "None";
+            }
+
+            readout.innerText = connectorText;
+            
+            // Update Simulated database listing immediately on input changes
+            simulateDatabaseOutput();
+        }
+
+        // Reset Venn Highlights
+        function resetVennLogic() {
+            document.getElementById('circle-a').style.fill = "rgba(99, 102, 241, 0.15)";
+            document.getElementById('circle-b').style.fill = "rgba(236, 72, 153, 0.15)";
+            document.getElementById('circle-c').style.fill = "rgba(20, 184, 166, 0.15)";
+            document.getElementById('logic-readout').innerText = "None";
+        }
+
+        // Simulates dynamic article listing
+        function simulateDatabaseOutput() {
+            const feed = document.getElementById('database-feed');
+            const counter = document.getElementById('hit-counter');
+            
+            if (activeQueryTokens.length === 0) {
+                feed.innerHTML = `<div class="text-slate-500 text-xs italic text-center py-8">The simulated search index is empty. Complete a successful query or select terms to scan articles.</div>`;
+                counter.innerText = '0';
+                return;
+            }
+
+            const currentMission = missions[currentMissionIndex];
+            const str = getConstructedString().toUpperCase();
+
+            // Sift mock database content
+            let activeResults = [];
+
+            if (currentMode === 'mission') {
+                activeResults = currentMission.results.filter(article => {
+                    // Simulates search matches based on token contents
+                    return article.matches.some(term => str.includes(term.toUpperCase()));
+                });
+            } else {
+                // Sandbox Mode dynamic simulated items generator
+                activeResults = generateSandboxMockResults(str);
+            }
+
+            counter.innerText = activeResults.length;
+
+            if (activeResults.length === 0) {
+                feed.innerHTML = `<div class="text-rose-400 text-xs italic text-center py-8 bg-rose-950/20 border border-rose-900/30 rounded-xl">0 records match your current criteria. Adjust your operators or remove terms to broaden search bounds.</div>`;
+                return;
+            }
+
+            feed.innerHTML = '';
+            activeResults.forEach(article => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-950/60 p-4 rounded-xl border border-slate-800 hover:border-slate-700 transition duration-150";
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start gap-3">
+                        <h4 class="text-xs font-bold text-slate-100 hover:text-indigo-400 transition cursor-pointer">${article.title}</h4>
+                        <span class="text-[9px] font-mono bg-slate-900 border border-slate-800 text-slate-400 px-1.5 py-0.5 rounded">PDF FULL TEXT</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-2 leading-relaxed">${article.snippet}</p>
+                    <div class="flex items-center gap-2 mt-3 pt-2.5 border-t border-slate-900 text-[10px] text-slate-500">
+                        <span>Keywords mapped:</span>
+                        <div class="flex gap-1">
+                            ${article.matches.map(m => `<span class="bg-indigo-950/40 text-indigo-300 border border-indigo-900/50 px-1 rounded">${m}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                feed.appendChild(card);
+            });
+        }
+
+        // Generated mock values strictly for Sandbox environment
+        function generateSandboxMockResults(queryStr) {
+            const baseArticles = [
+                { title: "Artificial Intelligence in Modern Medicine", snippet: "How machine learning and deep medical models spot anomalies earlier than legacy manual screens.", matches: ["artificial intelligence", "AI", "medicine"] },
+                { title: "Managing Adolescent Screen Habits", snippet: "A research journal detailing how smart screen boundaries improve school focus.", matches: ["screen time", "adolescents"] },
+                { title: "Unlocking Wind Turbines: Environmental Impact Assessment", snippet: "Modern blades can safely avoid birds with sensory tracking technologies.", matches: ["wind turbines", "birds"] },
+                { title: "Climate Change and Global Warming Actions", snippet: "Practical physical engineering solutions to absorb gas emissions.", matches: ["climate change", "solutions", "global warming"] },
+                { title: "Oncology Review: Skin Cancers & Early Diagnostics", snippet: "Clinical review tracking visual analysis of localized skin oncology.", matches: ["skin cancer", "oncology"] }
+            ];
+
+            return baseArticles.filter(art => {
+                return art.matches.some(m => queryStr.includes(m.toUpperCase()));
+            });
+        }
+
+        // Central Validator check for current workspace logic
+        function evaluateQuery() {
+            if (activeQueryTokens.length === 0) {
+                showToast("⚠️ Build a search query before testing.");
+                return;
+            }
+
+            if (currentMode === 'sandbox') {
+                showToast("Sandbox expression validated!");
+                updateValidationStatus('✔', 'Sandbox Evaluated', 'text-sky-400', 'bg-sky-950/40 border-sky-800', 'Your syntax parses cleanly for query indexes.');
+                return;
+            }
+
+            const currentMission = missions[currentMissionIndex];
+            const check = currentMission.validate(activeQueryTokens);
+
+            if (check.valid) {
+                // Success!
+                score += 20;
+                document.getElementById('score-display').innerText = score;
+                updateValidationStatus('✔', check.msg, 'text-emerald-400', 'bg-emerald-950/40 border-emerald-800', check.detail);
+                
+                // Advance or Win Game
+                setTimeout(() => {
+                    nextLevel();
+                }, 2500);
+
+            } else {
+                // Invalid query configuration
+                updateValidationStatus('✕', check.msg, 'text-rose-400', 'bg-rose-950/40 border-rose-800', check.detail);
+                showToast("❌ Attempt failed! Read the advice below.");
+            }
+        }
+
+        // Updates state banner details
+        function updateValidationStatus(icon, title, textColor, bgColor, detail) {
+            const indicator = document.getElementById('validation-icon');
+            indicator.innerText = icon;
+            indicator.className = `flex items-center justify-center w-8 h-8 rounded-full ${bgColor} ${textColor} text-sm font-bold`;
+            document.getElementById('validation-summary').innerText = title;
+            document.getElementById('validation-summary').className = `text-xs font-bold ${textColor}`;
+            document.getElementById('validation-detail').innerText = detail;
+        }
+
+        // Loads next phase level index
+        function nextLevel() {
+            currentMissionIndex++;
+            if (currentMissionIndex < missions.length) {
+                showToast("🌟 Advanced to next mission!");
+                loadMission(currentMissionIndex);
+            } else {
+                showCertificate();
+            }
+        }
+
+        // Toggle Views: Missions versus Custom Sandbox
+        function switchMode(mode) {
+            currentMode = mode;
+            const btnMission = document.getElementById('btn-mission-mode');
+            const btnSandbox = document.getElementById('btn-sandbox-mode');
+            const sandboxHeader = document.getElementById('sandbox-header');
+            
+            if (mode === 'sandbox') {
+                btnSandbox.className = "px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-md transition duration-200";
+                btnMission.className = "px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition duration-200";
+                sandboxHeader.classList.remove('hidden');
+
+                // Custom Sandbox Setup
+                loadSandboxMode();
+            } else {
+                btnMission.className = "px-4 py-2 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow-md transition duration-200";
+                btnSandbox.className = "px-4 py-2 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition duration-200";
+                sandboxHeader.classList.add('hidden');
+
+                // Reload current active mission
+                loadMission(currentMissionIndex);
+            }
+        }
+
+        // Sets Sandbox token variants globally
+        function loadSandboxMode() {
+            activeQueryTokens = [];
+            updateWorkspaceDisplay();
+
+            document.getElementById('level-badge').innerText = `Sandbox Mode`;
+            document.getElementById('mission-title').innerText = "Free Play Sandbox";
+            document.getElementById('research-question').innerText = `"Formulate custom inquiries in the assembly lanes."`;
+            document.getElementById('mission-goal').innerText = "Goal: Experiment freely to understand AND, OR, NOT operations.";
+            document.getElementById('mission-hint').innerText = "Use parentheses ( ) for synonym structures and double quotes \" \" around multiple words.";
+
+            const sandboxKeywords = [
+                { id: 'sb_ai', label: 'artificial intelligence', type: 'keyword' },
+                { id: 'sb_medicine', label: 'medicine', type: 'keyword' },
+                { id: 'sb_birds', label: 'birds', type: 'keyword' }
+            ];
+
+            const sandboxSynonyms = [
+                { id: 'sb_climate', label: 'climate change', type: 'synonym' },
+                { id: 'sb_solutions', label: 'solutions', type: 'synonym' },
+                { id: 'sb_screentime', label: 'screen time', type: 'synonym' }
+            ];
+
+            populateBank('operator-bank', operatorBank);
+            populateBank('keyword-bank', sandboxKeywords);
+            populateBank('synonym-bank', sandboxSynonyms);
+
+            updateVennDiagramLabels({ keywords: sandboxKeywords, synonyms: sandboxSynonyms });
+            resetVennLogic();
+        }
+
+        // Clear button hook inside sandbox mode
+        function resetSandbox() {
+            clearWorkspace();
+            updateValidationStatus('?', 'Sandbox Cleared.', 'text-slate-400', 'bg-slate-800', 'Insert elements or use syntax operators to start.');
+        }
+
+        // Finish Game overlay modals
+        function showCertificate() {
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('completion-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('completion-modal').classList.add('hidden');
+        }
+
+        // Reset overall game state
+        function restartGame() {
+            closeModal();
+            initGame();
+        }
+
+        // Toast Messages Helper
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = message;
+            toast.className = "fixed bottom-6 right-6 bg-slate-950 border border-slate-800 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 translate-y-0 opacity-100 transition-all duration-300 z-50";
+
+            setTimeout(() => {
+                toast.className = "fixed bottom-6 right-6 bg-slate-950 border border-slate-800 text-slate-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 translate-y-24 opacity-0 transition-all duration-300 z-50";
+            }, 2000);
+        }
+
+        // Copy Constructed query to clipboard
+        function copyToClipboard() {
+            const input = document.getElementById('direct-query-input');
+            if (!input.value) {
+                showToast("⚠️ Nothing to copy yet!");
+                return;
+            }
+            
+            // Modern copy logic fallback
+            const el = document.createElement('textarea');
+            el.value = input.value;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            showToast("Copied query string! 📋");
+        }
+    </script>
+</body>
+</html>
